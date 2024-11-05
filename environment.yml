@@ -1,0 +1,11 @@
+name: recursive_clustering
+channels:
+  - conda-forge
+dependencies:
+  - matplotlib
+  - pandas
+  - scikit-learn
+  - scipy
+  - ipykernel
+  - ipywidgets
+  - seaborn
