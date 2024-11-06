@@ -112,6 +112,10 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 closest_sample = local_cluster[np.argmin(local_cluster_distances_sum)]
                 X_j_indexes_i.append(closest_sample)
 
+            sorted_indexes = np.argsort(X_j_indexes_i)
+            X_j_indexes_i = [X_j_indexes_i[i] for i in sorted_indexes]
+            global_clusters_indexes_i = [global_clusters_indexes_i[i] for i in sorted_indexes]
+
             X_j = X.iloc[X_j_indexes_i, :]
             i += 1
 
