@@ -7,7 +7,7 @@ from sklearn.utils.random import sample_without_replacement
 from sklearn.metrics.pairwise import cosine_distances
 
 
-class RecursiveClustering(ClusterMixin, BaseEstimator):
+class RecursiveClustering_new(ClusterMixin, BaseEstimator):
     def __init__(
             self,
             components_size=10,
@@ -41,59 +41,57 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         n_components = X.shape[1]
         random_state = check_random_state(self.random_state)
 
-        # we will work with pandas DataFrames for the moment and maybe change to numpy arrays later
-        if not isinstance(X, pd.DataFrame):
-            X = pd.DataFrame(X)
+        # we will work with numpy for speed
+        if not isinstance(X, np.ndarray):
+            X = X.to_numpy()
 
-        df_label_sequence = X.iloc[:, []]
+        label_sequence = np.empty((n_samples, 0), dtype=int)
 
         # find distance between each pair of samples once
         distances = cosine_distances(X)
 
-        X_j = X.copy()
+        # initialize k-means estimator
+        k_means_estimator = KMeans(n_clusters=self.kmeans_n_clusters, init=self.kmeans_init,
+                                   n_init=self.kmeans_n_init,
+                                   max_iter=self.kmeans_max_iter, tol=self.kmeans_tol,
+                                   verbose=self.kmeans_verbose,
+                                   random_state=random_state, algorithm=self.kmeans_algorithm)
+
+        X_j = X
         global_clusters_indexes_i = []
         i = 0
         # initialize with different length of codes and uniques to enter the while loop
         codes = [0, 1]
-        uniques = [0]
+        unique_labels = [0]
+        X_j_indexes_i_last = None
         # iterate until every sequence of labels is unique
-        while len(codes) != len(uniques):
+        while len(codes) != len(unique_labels):
 
             labels_i = []
             for repetition in range(self.repetitions):
                 # random sample of components
                 components = sample_without_replacement(n_components, self.components_size, random_state=random_state)
-                X_p = X_j.iloc[:, components]
-                k_means_estimator = KMeans(n_clusters=self.kmeans_n_clusters, init=self.kmeans_init,
-                                           n_init=self.kmeans_n_init,
-                                           max_iter=self.kmeans_max_iter, tol=self.kmeans_tol,
-                                           verbose=self.kmeans_verbose,
-                                           random_state=random_state, algorithm=self.kmeans_algorithm)
+                X_p = X_j[:, components]
                 labels_r = k_means_estimator.fit_predict(X_p)
                 labels_i.append(labels_r)
 
-            # transform sequence of labels to pandas DataFrame
-            labels_i = pd.DataFrame(labels_i).T
-            labels_i['labels'] = labels_i.apply(lambda x: tuple(x), axis=1)
-            labels_i = labels_i['labels']
-            # transform tuples of labels to unique integers for each unique tuple
-            codes, uniques = labels_i.factorize()
-            labels_i = pd.DataFrame({'labels': codes})
-            labels_i.index = X_j.index
+            # factorize labels using numpy
+            labels_i = np.array(labels_i).T
+            unique_labels, codes = np.unique(labels_i, axis=0, return_inverse=True)
+
             # add to the sequence of labels
             if i == 0:
                 # every sample is present in the first iteration
-                df_label_sequence_i = labels_i
-                df_label_sequence = df_label_sequence.join(df_label_sequence_i)
+                label_sequence_i = codes
+                label_sequence = np.concatenate((label_sequence, label_sequence_i[:, None]), axis=1)
             else:
                 # only some samples are present in the following iterations
                 # so we need to add the same label as the representative sample to the rest of the samples
-                df_label_sequence_i = []
-                for j, cluster in enumerate(global_clusters_indexes_i):
-                    df_cat = pd.DataFrame({'labels': codes[j]}, index=cluster)
-                    df_label_sequence_i.append(df_cat)
-                df_label_sequence_i = pd.concat(df_label_sequence_i)
-                df_label_sequence = df_label_sequence.join(df_label_sequence_i, how='left', rsuffix=f'_{i}')
+                label_sequence_i = np.empty((n_samples, 1), dtype=int)
+                for j, cluster_idxs in enumerate(global_clusters_indexes_i):
+                    cluster_label = codes[j]
+                    label_sequence_i[cluster_idxs] = cluster_label
+                label_sequence = np.concatenate((label_sequence, label_sequence_i), axis=1)
 
             # find the one sample of each cluster that is the closest to every other sample in the cluster
 
@@ -103,25 +101,29 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # global_clusters_indexes_i[i] will contain the indexes of ALL the samples in the i-th cluster
             global_clusters_indexes_i = []
             for code in np.unique(codes):
-                global_cluster = df_label_sequence_i[df_label_sequence_i['labels'] == code].index
-                global_clusters_indexes_i.append(global_cluster)
-                # local cluster contains only the samples from the current iteration i
-                local_cluster = labels_i[labels_i['labels'] == code].index
-                local_cluster_distances = distances[local_cluster][:, local_cluster]
+                local_cluster_idx = np.where(codes == code)[0]
+                # here is still wrong, we need to transform the indexes to the original indexes
+                if X_j_indexes_i_last is not None:
+                    local_cluster_idx = X_j_indexes_i_last[local_cluster_idx]
+                local_cluster_distances = distances[local_cluster_idx][:, local_cluster_idx]
                 local_cluster_distances_sum = local_cluster_distances.sum(axis=0)
-                closest_sample = local_cluster[np.argmin(local_cluster_distances_sum)]
-                X_j_indexes_i.append(closest_sample)
+                closest_sample_idx = local_cluster_idx[np.argmin(local_cluster_distances_sum)]
+                X_j_indexes_i.append(closest_sample_idx)
+                global_cluster_idx = np.where(label_sequence_i == code)[0]
+                global_clusters_indexes_i.append(global_cluster_idx)
 
+            X_j_indexes_i = np.array(X_j_indexes_i)
             sorted_indexes = np.argsort(X_j_indexes_i)
-            X_j_indexes_i = [X_j_indexes_i[i] for i in sorted_indexes]
+            X_j_indexes_i = X_j_indexes_i[sorted_indexes]
             global_clusters_indexes_i = [global_clusters_indexes_i[i] for i in sorted_indexes]
+            X_j_indexes_i_last = X_j_indexes_i.copy()
 
-            X_j = X.iloc[X_j_indexes_i, :]
+            X_j = X[X_j_indexes_i, :]
             i += 1
 
-        self.n_clusters_ = len(uniques)
-        self.labels_ = df_label_sequence.iloc[:, -1].values
-        self.cluster_representatives_ = X_j.to_numpy()
+        self.n_clusters_ = len(unique_labels)
+        self.labels_ = label_sequence[:, -1]
+        self.cluster_representatives_ = X_j
         self.cluster_representatives_labels_ = np.unique(codes)
         return self
 
