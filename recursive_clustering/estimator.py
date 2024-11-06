@@ -6,7 +6,7 @@ from sklearn.utils.random import sample_without_replacement
 from sklearn.metrics.pairwise import cosine_distances
 
 
-class RecursiveClustering(ClusterMixin, BaseEstimator):
+class RecursiveClustering_new(ClusterMixin, BaseEstimator):
     def __init__(
             self,
             components_size=10,
