@@ -6,7 +6,7 @@ from sklearn.utils.random import sample_without_replacement
 from sklearn.metrics.pairwise import cosine_distances
 
 
-class RecursiveClustering_new(ClusterMixin, BaseEstimator):
+class RecursiveClustering(ClusterMixin, BaseEstimator):
     def __init__(
             self,
             components_size=10,
@@ -91,27 +91,39 @@ class RecursiveClustering_new(ClusterMixin, BaseEstimator):
                     cluster_label = codes[j]
                     label_sequence_i[cluster_idxs] = cluster_label
                 label_sequence = np.concatenate((label_sequence, label_sequence_i), axis=1)
+                # we could replace it with something like
+                # label_sequence_i = np.empty((n_samples), dtype=int)
+                # # Concatenate all cluster indexes and corresponding codes into arrays
+                # all_cluster_idxs = np.concatenate(global_clusters_indexes_i)
+                # all_labels = np.repeat(codes, [len(cluster) for cluster in global_clusters_indexes_i])
+                # # Assign labels to label_sequence_i based on these arrays
+                # label_sequence_i[all_cluster_idxs] = all_labels
+                # label_sequence = np.concatenate((label_sequence, label_sequence_i[:, None]), axis=1)
+                # but this is actually slower
 
             # find the one sample of each cluster that is the closest to every other sample in the cluster
 
             # X_j_indexes_i[i] will contain the index of the sample that is the closest to every other sample
             # in the i-th cluster, in other words, the representative sample of the i-th cluster
-            X_j_indexes_i = []
+            X_j_indexes_i = np.empty(len(unique_labels), dtype=int)
             # global_clusters_indexes_i[i] will contain the indexes of ALL the samples in the i-th cluster
             global_clusters_indexes_i = []
-            for code in np.unique(codes):
+            # we need the loop because the number of elements of each cluster is not the same
+            # so it is difficult to vectorize
+            for j, code in enumerate(np.unique(codes)):
                 local_cluster_idx = np.where(codes == code)[0]
-                # here is still wrong, we need to transform the indexes to the original indexes
+                # we need to transform the indexes to the original indexes
                 if X_j_indexes_i_last is not None:
                     local_cluster_idx = X_j_indexes_i_last[local_cluster_idx]
-                local_cluster_distances = distances[local_cluster_idx][:, local_cluster_idx]
+                local_cluster_distances = distances[np.ix_(local_cluster_idx, local_cluster_idx)]
                 local_cluster_distances_sum = local_cluster_distances.sum(axis=0)
                 closest_sample_idx = local_cluster_idx[np.argmin(local_cluster_distances_sum)]
-                X_j_indexes_i.append(closest_sample_idx)
+                X_j_indexes_i[j] = closest_sample_idx
                 global_cluster_idx = np.where(label_sequence_i == code)[0]
                 global_clusters_indexes_i.append(global_cluster_idx)
 
-            X_j_indexes_i = np.array(X_j_indexes_i)
+            # sort the indexes to make the comparison easier between change in the same algorithm
+            # maybe we will eliminate this at the end for speed
             sorted_indexes = np.argsort(X_j_indexes_i)
             X_j_indexes_i = X_j_indexes_i[sorted_indexes]
             global_clusters_indexes_i = [global_clusters_indexes_i[i] for i in sorted_indexes]
