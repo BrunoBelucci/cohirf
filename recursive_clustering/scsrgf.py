@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.sparse import csr_matrix, issparse
 from sklearn.base import ClusterMixin, BaseEstimator
 from sklearn.cluster import SpectralClustering
 from sklearn.neighbors import NearestNeighbors
@@ -15,10 +16,15 @@ from sklearn.metrics import pairwise_distances
 def snf_sparse(W_list, K=20, t=20, alpha=1.0):
     C = len(W_list)
     m, n = W_list[0].shape
+    is_sparse = issparse(W_list[0])
 
     # Normalize and symmetrize matrices
     for i in range(C):
-        W_list[i] = W_list[i] / W_list[i].sum(axis=1, keepdims=True)
+        if is_sparse:
+            # keepdims=True) -> already a scipy sparse matrix that keeps dims
+            W_list[i] = W_list[i] / W_list[i].sum(axis=1)
+        else:
+            W_list[i] = W_list[i] / W_list[i].sum(axis=1, keepdims=True)
         W_list[i] = (W_list[i] + W_list[i].T) / 2
 
     # Find dominate set
@@ -31,7 +37,10 @@ def snf_sparse(W_list, K=20, t=20, alpha=1.0):
         Wsum = np.sum(W_list, axis=0)
 
     W = Wsum / C
-    W = W / W.sum(axis=1, keepdims=True)
+    if is_sparse:
+        W = W / W.sum(axis=1)
+    else:
+        W = W / W.sum(axis=1, keepdims=True)
     W = (W + W.T + np.eye(n)) / 2
     return W
 
@@ -42,10 +51,17 @@ def bo_normalized(W, alpha=1):
 
 
 def find_dominate_set_sparse(W, K):
-    idx = np.argsort(-W, axis=1)[:, :K]
-    new_W = np.zeros_like(W)
-    np.put_along_axis(new_W, idx, np.take_along_axis(W, idx, axis=1), axis=1)
+    is_sparse = issparse(W)
+    if is_sparse:
+        W_numpy = W.toarray()
+    else:
+        W_numpy = W
+    idx = np.argsort(-W_numpy, axis=1)[:, :K]
+    new_W = np.zeros_like(W_numpy)
+    np.put_along_axis(new_W, idx, np.take_along_axis(W_numpy, idx, axis=1), axis=1)
     new_W = new_W / new_W.sum(axis=1, keepdims=True)
+    if is_sparse:
+        new_W = csr_matrix(new_W)
     return new_W
 
 
@@ -73,6 +89,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             sc_eigen_tol=0.0,
             sc_assign_labels='kmeans',
             sc_verbose=False,
+            random_state=None,
     ):
         self.knn = knn
         self.n_similarities = n_similarities
@@ -86,6 +103,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
         self.sc_eigen_tol = sc_eigen_tol
         self.sc_assign_labels = sc_assign_labels
         self.sc_verbose = sc_verbose
+        self.random_state = random_state
         self.labels_ = None
 
     def fit(self, X, y=None, sample_weight=None):
@@ -106,6 +124,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             eigen_tol=self.sc_eigen_tol,
             assign_labels=self.sc_assign_labels,
             verbose=self.sc_verbose,
+            random_state=self.random_state
         )
         self.labels_ = spectral_clustering.fit_predict(fused_matrix)
         return self
