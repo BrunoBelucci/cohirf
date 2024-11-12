@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "recursive_clustering"
+version = "0.2"
+description = """recursive_clustering"""
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = "MIT"
+authors = [
+  { name = "Bruno Belucci", email = "bruno.belucci-teixeira@dauphine.eu" },
+]
+maintainers = [
+  { name = "Bruno Belucci", email = "bruno.belucci-teixeira@dauphine.eu" },
+]
+keywords = [
+    "clustering",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    "seaborn",
+    "openml",
+    "ipykernel",
+    "ipywidgets",
+]
+
+[project.urls]
+"Source code" = "https://github.com/BrunoBelucci/recursive_clustering"
+
+[project.optional-dependencies]
+test = [
+  "pytest",
+]
+docs = [
+  "sphinx",
+  "sphinx-rtd-theme",
+]
+all = [
+    "recursive_clustering[test]",
+    "recursive_clustering[docs]",
+]
+
+
