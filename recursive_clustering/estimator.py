@@ -49,9 +49,6 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
 
         label_sequence = np.empty((n_samples, 0), dtype=int)
 
-        # find distance between each pair of samples once
-        distances = cosine_distances(X)
-
         def run_one_repetition(X_j, r):
             repetition_random_sate = check_random_state(random_state.randint(0, 1e6) + r)
             k_means_estimator = KMeans(n_clusters=self.kmeans_n_clusters, init=self.kmeans_init,
@@ -122,7 +119,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 # we need to transform the indexes to the original indexes
                 if X_j_indexes_i_last is not None:
                     local_cluster_idx = X_j_indexes_i_last[local_cluster_idx]
-                local_cluster_distances = distances[np.ix_(local_cluster_idx, local_cluster_idx)]
+                local_cluster = X[local_cluster_idx, :]
+                local_cluster_distances = cosine_distances(local_cluster)
                 local_cluster_distances_sum = local_cluster_distances.sum(axis=0)
                 closest_sample_idx = local_cluster_idx[np.argmin(local_cluster_distances_sum)]
                 X_j_indexes_i[j] = closest_sample_idx
