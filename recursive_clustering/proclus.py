@@ -8,6 +8,7 @@
 #
 # Date: Mon Dec 22 14:00:03 BRST 2014
 #
+# from https://github.com/cmmp/pyproclus
 # Updated for python 3 and wrapped in sklearn estimator by Bruno Belucci
 
 
