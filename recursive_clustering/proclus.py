@@ -8,11 +8,13 @@
 #
 # Date: Mon Dec 22 14:00:03 BRST 2014
 #
-# Updated for python 3 by Bruno Belucci
+# Updated for python 3 and wrapped in sklearn estimator by Bruno Belucci
 
 
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
+from sklearn.base import ClusterMixin, BaseEstimator
+from sklearn.utils import check_random_state
 
 
 def greedy(X, S, k):
@@ -306,3 +308,40 @@ def computeBasicAccuracy(pred, expect):
 
     return acc
 
+
+class Proclus(ClusterMixin, BaseEstimator):
+    def __init__(
+            self,
+            n_clusters=2,
+            avg_dims=3,
+            min_deviation=0.1,
+            cte_A=30,
+            cte_B=3,
+            max_iter=30,
+            random_state=None
+    ):
+        self.n_clusters = n_clusters
+        self.avg_dims = avg_dims
+        self.min_deviation = min_deviation
+        self.cte_A = cte_A
+        self.cte_B = cte_B
+        self.max_iter = max_iter
+        self.random_state = random_state
+        self.medoids_ = None
+        self.medoids_dims_ = None
+        self.labels_ = None
+
+    def fit(self, X, y=None, sample_weight=None):
+        random_state = check_random_state(self.random_state)
+        seed = random_state.randint(0, 1e6)
+        medoids, medoids_dims, labels = proclus(X, k=self.n_clusters, l=self.avg_dims,
+                                                minDeviation=self.min_deviation, A=self.cte_A,
+                                                B=self.cte_B, niters=self.max_iter, seed=seed)
+        self.medoids_ = medoids
+        self.medoids_dims_ = medoids_dims
+        self.labels_ = labels
+        return self
+
+    def fit_predict(self, X, y=None, sample_weight=None):
+        self.fit(X)
+        return self.labels_
