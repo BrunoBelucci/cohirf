@@ -4,6 +4,7 @@ from sklearn.base import ClusterMixin, BaseEstimator
 from sklearn.cluster import SpectralClustering
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import pairwise_distances
+from sklearn.utils import check_random_state
 
 
 # based on the original implementation in matlab Cai, Xiaosha, Dong Huang, Chang-Dong Wang, and Chee-Keong Kwoh.
@@ -107,9 +108,10 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
         self.labels_ = None
 
     def fit(self, X, y=None, sample_weight=None):
+        random_state = check_random_state(self.random_state)
         all_matrices = []
         for i in range(self.n_similarities):
-            seq = np.random.permutation(X.shape[1])
+            seq = random_state.permutation(X.shape[1])
             X_i = X[:, seq[:int(X.shape[1] * self.sampling_ratio)]]
             similarity_matrix = knn_sparse(X_i, self.knn)
             all_matrices.append(similarity_matrix)

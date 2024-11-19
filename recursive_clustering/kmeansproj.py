@@ -27,6 +27,7 @@
 import numpy as np
 from scipy.linalg import svd
 from sklearn.base import ClusterMixin, BaseEstimator
+from sklearn.utils import check_random_state
 
 
 def k_means_proj_clustering(points_coords, k, threshold=1e-3, kms_iters=10, fdpkm_iters=10, is_constant_dim=True,
@@ -80,12 +81,12 @@ def find_dimension(points_coords, is_constant_dim, const_flat_dim, find_dim_alfa
         return const_flat_dim
     d = points_coords.shape[0]
     alfa = find_dim_alfa
-    mju_star_p1 = calc_ssd(np.ones(points_coords.shape[1]), points_coords, get_best_qflat(points_coords, 1))
+    mju_star_p1 = calc_ssd(np.ones(points_coords.shape[1]), points_coords, [get_best_qflat(points_coords, 1)])
     mju_star_pii = []
 
     for q in range(d + 1):
         qflat = get_best_qflat(points_coords, q)
-        mju_star_pii.append(calc_ssd(np.ones(points_coords.shape[1]), points_coords, qflat))
+        mju_star_pii.append(calc_ssd(np.ones(points_coords.shape[1]), points_coords, [qflat]))
         if mju_star_pii[-1] > alfa * mju_star_p1:
             q_tag = q
             break
@@ -104,7 +105,7 @@ def find_dimension(points_coords, is_constant_dim, const_flat_dim, find_dim_alfa
 
 def calc_ssd(clust_indices, points_coords, flats_struct_v):
     ssd = 0
-    for i in range(1, max(clust_indices) + 1):
+    for i in range(1, int(max(clust_indices) + 1)):
         cluster_points = points_coords[:, clust_indices == i]
         flat = flats_struct_v[i - 1]
         ssd += np.sum(calc_dists_from_qflat(cluster_points, flat['Vectors'], flat['P0']) ** 2)
@@ -122,7 +123,7 @@ def calc_dists_from_qflat(points_coords, vectors, p0):
 
 def split_clusters(clust_indices, points_coords, m, gamma, is_constant_dim, const_flat_dim, find_dim_alfa):
     qi_mul_norm_Pi = []
-    for i in range(1, max(clust_indices) + 1):
+    for i in range(1, int(max(clust_indices) + 1)):
         cluster_points = points_coords[:, clust_indices == i]
         qi_mul_norm_Pi.append(
             np.sum(clust_indices == i) * find_dimension(cluster_points, is_constant_dim, const_flat_dim, find_dim_alfa))
@@ -177,14 +178,14 @@ def merge_clusters(clust_indices, points_coords, m, is_constant_dim, const_flat_
                                         find_dim_alfa)
                 union_dim = min(ii_dim, jj_dim)
                 union_flats_struct = get_best_qflat(union_points, union_dim)
-                mju_star[ii - 1, jj - 1] = calc_ssd(np.ones(union_points.shape[1]), union_points, union_flats_struct)
+                mju_star[ii - 1, jj - 1] = calc_ssd(np.ones(union_points.shape[1]), union_points, [union_flats_struct])
                 for kk in range(1, np.max(clust_indices) + 1):
                     if kk == ii or kk == jj or np.sum(clust_indices == kk) == 0:
                         continue
                     other_clust_points = points_coords[:, clust_indices == kk]
                     flats_struct = get_best_qflat(other_clust_points, union_dim)
                     mju_star[ii - 1, jj - 1] += calc_ssd(np.ones(other_clust_points.shape[1]), other_clust_points,
-                                                         flats_struct)
+                                                         [flats_struct])
         ii, jj = np.unravel_index(np.argmin(mju_star), mju_star.shape)
         clust_indices[clust_indices == (jj + 1)] = ii + 1
     return clust_indices
@@ -223,7 +224,8 @@ class KMeansProj(BaseEstimator, ClusterMixin):
             is_constant_dim=True,
             find_dim_alfa=0.5,
             const_flat_dim=2,
-            gamma=0.3
+            gamma=0.3,
+            random_state=None
     ):
         self.n_clusters = n_clusters
         self.threshold = threshold
@@ -233,11 +235,15 @@ class KMeansProj(BaseEstimator, ClusterMixin):
         self.find_dim_alfa = find_dim_alfa
         self.const_flat_dim = const_flat_dim
         self.gamma = gamma
+        self.random_state = random_state
         self.labels_ = None
         self.ssd_vector_ = None
         self.flats_struct_v_ = None
 
     def fit(self, X, y=None, sample_weight=None):
+        random_state = check_random_state(self.random_state)
+        np_seed = random_state.randint(0, 1e6)
+        np.random.seed(np_seed)
         clust_indices, ssd_vector, flats_struct_v = k_means_proj_clustering(X.T, self.n_clusters, self.threshold,
                                                                             self.kms_iters, self.fdpkm_iters,
                                                                             self.is_constant_dim, self.find_dim_alfa,
