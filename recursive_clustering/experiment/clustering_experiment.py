@@ -1,58 +1,21 @@
 import random
 from copy import deepcopy
-from itertools import product
+from abc import ABC
 from typing import Optional
 
 import numpy as np
-import openml
 from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score, adjusted_mutual_info_score,
                              normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score)
 
 
 from ml_experiments.base_experiment import BaseExperiment
+from recursive_clustering.experiment.tested_models import models_dict
 
 
-class ClusteringExperiment(BaseExperiment):
-    def __init__(
-            self,
-            datasets_ids: Optional[list[int]] = None,
-            **kwargs
-    ):
-        super().__init__(**kwargs)
-        self.datasets_ids = datasets_ids
-
-    def _add_arguments_to_parser(self):
-        super()._add_arguments_to_parser()
-        self.parser.add_argument('--datasets_ids', type=int, nargs='*')
-
-    def _unpack_parser(self):
-        args = super()._unpack_parser()
-        self.datasets_ids = args.datasets_ids
-
+class ClusteringExperiment(BaseExperiment, ABC):
     @property
     def models_dict(self):
-        pass
-
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
-        dataset_id = combination['dataset_id']
-        dataset = openml.datasets.get_dataset(dataset_id)
-        target = dataset.default_target_attribute
-        X, y, cat_ind, att_names = dataset.get_data(target=target)
-        cat_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is True]
-        cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
-        n_classes = len(y.unique())
-        dataset_name = dataset.name
-        return {
-            'X': X,
-            'y': y,
-            'cat_ind': cat_ind,
-            'att_names': att_names,
-            'cat_features_names': cat_features_names,
-            'cat_dims': cat_dims,
-            'n_classes': n_classes,
-            'dataset_name': dataset_name
-        }
+        return models_dict.copy()
 
     def _load_model(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                     **kwargs):
@@ -90,7 +53,7 @@ class ClusteringExperiment(BaseExperiment):
         model = kwargs['load_model_return']['model']
         X = kwargs['load_data_return']['X']
         y_pred = model.fit_predict(X)
-        return { 'y_pred': y_pred }
+        return {'y_pred': y_pred}
 
     def _evaluate_model(self, combination: dict, unique_params: Optional[dict] = None,
                         extra_params: Optional[dict] = None, **kwargs):
@@ -110,13 +73,3 @@ class ClusteringExperiment(BaseExperiment):
             else:
                 results[score_name] = score_fn(y_true, y_pred)
         return results
-
-    def _get_combinations(self):
-        combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_ids))
-        combination_names = ['model_nickname', 'seed_model', 'dataset_id']
-        combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
-                        for combination in combinations]
-        combination_names += ['model_params', 'fit_params']
-        unique_params = dict()
-        extra_params = dict(n_jobs=self.n_jobs, return_results=False)
-        return combinations, combination_names, unique_params, extra_params

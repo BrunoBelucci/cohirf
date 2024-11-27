@@ -10,6 +10,7 @@ dependencies:
   - ipykernel
   - ipywidgets
   - seaborn
+  - optuna
   - pip
   - pip:
       - openml
