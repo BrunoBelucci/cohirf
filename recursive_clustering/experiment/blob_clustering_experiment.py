@@ -1,3 +1,4 @@
+import argparse
 from itertools import product
 from typing import Optional
 
@@ -70,3 +71,9 @@ class BlobClusteringExperiment(ClusteringExperiment):
         X, y = make_blobs(n_samples=n_samples, n_features=n_features, centers=centers, cluster_std=cluster_std,
                           center_box=center_box, shuffle=shuffle, random_state=seed_dataset)
         return {'X': X, 'y': y}
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    experiment = BlobClusteringExperiment(parser=parser)
+    experiment.run()

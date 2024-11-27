@@ -1,3 +1,4 @@
+import argparse
 from itertools import product
 from typing import Optional
 
@@ -116,3 +117,9 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
                                    flip_y=flip_y, class_sep=class_sep, hypercube=hypercube, shift=shift, scale=scale,
                                    shuffle=shuffle, random_state=seed_dataset)
         return {'X': X, 'y': y}
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    experiment = ClassificationClusteringExperiment(parser=parser)
+    experiment.run()

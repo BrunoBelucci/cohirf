@@ -1,12 +1,8 @@
-import random
-from copy import deepcopy
+import argparse
 from itertools import product
 from typing import Optional
 
-import numpy as np
 import openml
-from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score, adjusted_mutual_info_score,
-                             normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score)
 
 from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
 
@@ -58,3 +54,9 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         unique_params = dict()
         extra_params = dict(n_jobs=self.n_jobs, return_results=False)
         return combinations, combination_names, unique_params, extra_params
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    experiment = OpenmlClusteringExperiment(parser=parser)
+    experiment.run()
