@@ -5,6 +5,7 @@ from sklearn.utils import check_random_state
 from sklearn.utils.random import sample_without_replacement
 from sklearn.metrics.pairwise import cosine_distances
 from joblib import Parallel, delayed
+import optuna
 
 
 class RecursiveClustering(ClusterMixin, BaseEstimator):
@@ -152,3 +153,16 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         labels = np.argmin(distances, axis=1)
         labels = self.cluster_representatives_labels_[labels]
         return labels
+
+    def create_search_space(self):
+        search_space = dict(
+            components_size=optuna.distributions.IntDistribution(3, 30),
+            repetitions=optuna.distributions.IntDistribution(3, 10),
+            kmeans_n_clusters=optuna.distributions.IntDistribution(2, 10),
+        )
+        default_values = dict(
+            components_size=10,
+            repetitions=10,
+            kmeans_n_clusters=3,
+        )
+        return search_space, default_values
