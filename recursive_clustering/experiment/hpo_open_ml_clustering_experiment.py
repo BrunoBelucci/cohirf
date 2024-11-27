@@ -29,10 +29,6 @@ class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
-        return {}
-
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
         dataset_id = combination['dataset_id']
         dataset = openml.datasets.get_dataset(dataset_id)
         target = dataset.default_target_attribute
