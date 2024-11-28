@@ -23,6 +23,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.datasets_ids = args.datasets_ids
+        return args
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):

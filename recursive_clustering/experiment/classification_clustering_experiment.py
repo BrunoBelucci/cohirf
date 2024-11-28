@@ -79,6 +79,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.scale = args.scale
         self.shuffle = args.shuffle
         self.seeds_dataset = args.seeds_dataset
+        return args
 
     def _get_combinations(self):
         combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset))
