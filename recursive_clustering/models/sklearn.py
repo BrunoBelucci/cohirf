@@ -50,11 +50,11 @@ def create_search_space_optics():
     return search_space, default_values
 
 
-KMeans.create_search_space = create_search_space_kmeans
-AffinityPropagation.create_search_space = create_search_space_affinity_propagation
-MeanShift.create_search_space = create_search_space_mean_shift
-SpectralClustering.create_search_space = create_search_space_spectral_clustering
-AgglomerativeClustering.create_search_space = create_search_space_agglomerative_clustering
-DBSCAN.create_search_space = create_search_space_dbscan
-HDBSCAN.create_search_space = create_search_space_hdbscan
-OPTICS.create_search_space = create_search_space_optics
+KMeans.create_search_space = staticmethod(create_search_space_kmeans)
+AffinityPropagation.create_search_space = staticmethod(create_search_space_affinity_propagation)
+MeanShift.create_search_space = staticmethod(create_search_space_mean_shift)
+SpectralClustering.create_search_space = staticmethod(create_search_space_spectral_clustering)
+AgglomerativeClustering.create_search_space = staticmethod(create_search_space_agglomerative_clustering)
+DBSCAN.create_search_space = staticmethod(create_search_space_dbscan)
+HDBSCAN.create_search_space = staticmethod(create_search_space_hdbscan)
+OPTICS.create_search_space = staticmethod   (create_search_space_optics)
