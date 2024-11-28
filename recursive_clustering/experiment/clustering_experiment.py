@@ -3,6 +3,7 @@ from copy import deepcopy
 from abc import ABC
 from typing import Optional
 
+import mlflow
 import numpy as np
 from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score, adjusted_mutual_info_score,
                              normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score)
@@ -57,19 +58,44 @@ class ClusteringExperiment(BaseExperiment, ABC):
 
     def _evaluate_model(self, combination: dict, unique_params: Optional[dict] = None,
                         extra_params: Optional[dict] = None, **kwargs):
-        scores = kwargs['get_metrics_return']['scores']
+        scores = kwargs['get_metrics_return']
         X = kwargs['load_data_return']['X']
         y_true = kwargs['load_data_return']['y']
         y_pred = kwargs['fit_model_return']['y_pred']
-        results = {}
+        results = {'n_clusters_': len(np.unique(y_pred))}
         for score_name, score_fn in scores.items():
-            if score_name == 'homogeneity_completeness_v_measure':
-                homogeneity, completeness, v_measure = score_fn(y_true, y_pred)
-                results['homogeneity'] = homogeneity
-                results['completeness'] = completeness
-                results['v_measure'] = v_measure
-            elif score_name == 'silhouette':
-                results['silhouette'] = score_fn(X, y_pred)
-            else:
-                results[score_name] = score_fn(y_true, y_pred)
+            if callable(score_fn):
+                if score_name == 'homogeneity_completeness_v_measure':
+                    homogeneity, completeness, v_measure = score_fn(y_true, y_pred)
+                    results['homogeneity'] = homogeneity
+                    results['completeness'] = completeness
+                    results['v_measure'] = v_measure
+                elif score_name == 'silhouette':
+                    try:
+                        results['silhouette'] = score_fn(X, y_pred)
+                    except ValueError:
+                        results['silhouette'] = -1
+                else:
+                    results[score_name] = score_fn(y_true, y_pred)
         return results
+
+    def _log_run_results(self, combination: dict, unique_params: Optional[dict] = None,
+                         extra_params: Optional[dict] = None, mlflow_run_id=None, **kwargs):
+        if mlflow_run_id is None:
+            return
+
+        self._log_base_experiment_run_results(combination=combination, unique_params=unique_params,
+                                              extra_params=extra_params, mlflow_run_id=mlflow_run_id, **kwargs)
+
+        log_params = {}
+        log_metrics = {}
+
+        load_data_return = kwargs['load_data_return']
+        if 'dataset_name' in load_data_return:
+            log_params['dataset_name'] = load_data_return['dataset_name']
+
+        evaluate_model_return = kwargs['evaluate_model_return']
+        log_metrics.update(evaluate_model_return)
+
+        mlflow.log_params(log_params, run_id=mlflow_run_id)
+        mlflow.log_metrics(log_metrics, run_id=mlflow_run_id)
