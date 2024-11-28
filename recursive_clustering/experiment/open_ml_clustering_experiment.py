@@ -56,6 +56,31 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         extra_params = dict(n_jobs=self.n_jobs, return_results=False)
         return combinations, combination_names, unique_params, extra_params
 
+    def run_openml_experiment_combination(
+            self, model_nickname: str, dataset_id: int, seed_model: int = 0, model_params: Optional[dict] = None,
+            fit_params: Optional[dict] = None,
+            n_jobs: int = 1, return_results: bool = True,
+            log_to_mlflow: bool = False
+    ):
+
+        combination = {
+            'model_nickname': model_nickname,
+            'seed_model': seed_model,
+            'dataset_id': dataset_id,
+            'model_params': model_params,
+            'fit_params': fit_params,
+        }
+        unique_params = {}
+        extra_params = {
+            'n_jobs': n_jobs,
+            'return_results': return_results,
+        }
+        if log_to_mlflow:
+            return self._run_mlflow_and_train_model(combination=combination, unique_params=unique_params,
+                                                    extra_params=extra_params, return_results=return_results)
+        else:
+            return self._train_model(combination=combination, unique_params=unique_params, extra_params=extra_params,
+                                     return_results=return_results)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -73,6 +73,38 @@ class BlobClusteringExperiment(ClusteringExperiment):
                           center_box=center_box, shuffle=shuffle, random_state=seed_dataset)
         return {'X': X, 'y': y}
 
+    def run_blob_experiment_combination(self, model_nickname: str, seed_model: int = 0, seed_dataset: int = 0,
+                                        model_params: Optional[dict] = None, fit_params: Optional[dict] = None,
+                                        n_samples: int = 100, n_features: int = 2, centers: int = 3,
+                                        cluster_std: float = 1.0,
+                                        center_box: tuple[float, float] = (-10.0, 10.0), shuffle: bool = True,
+                                        n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False):
+        combination = {
+            'model_nickname': model_nickname,
+            'seed_model': seed_model,
+            'seed_dataset': seed_dataset,
+            'model_params': model_params,
+            'fit_params': fit_params,
+        }
+        unique_params = {
+            'n_samples': n_samples,
+            'n_features': n_features,
+            'centers': centers,
+            'cluster_std': cluster_std,
+            'center_box': center_box,
+            'shuffle': shuffle,
+        }
+        extra_params = {
+            'n_jobs': n_jobs,
+            'return_results': return_results,
+        }
+        if log_to_mlflow:
+            return self._run_mlflow_and_train_model(combination=combination, unique_params=unique_params,
+                                                    extra_params=extra_params, return_results=return_results)
+        else:
+            return self._train_model(combination=combination, unique_params=unique_params, extra_params=extra_params,
+                                     return_results=return_results)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
