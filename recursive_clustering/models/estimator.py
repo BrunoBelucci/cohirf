@@ -26,7 +26,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # kmeans_max_no_improvement=10,
             # kmeans_init_size=None,
             # kmeans_reassignment_ratio=0.01,
-            # n_jobs=1
+            n_jobs=1
     ):
         self.components_size = components_size
         self.repetitions = repetitions
@@ -42,7 +42,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         # self.kmeans_max_no_improvement = kmeans_max_no_improvement
         # self.kmeans_init_size = kmeans_init_size
         # self.kmeans_reassignment_ratio = kmeans_reassignment_ratio
-        # self.n_jobs = n_jobs
+        self.n_jobs = n_jobs
         self.n_clusters_ = None
         self.labels_ = None
         self.cluster_representatives_ = None
