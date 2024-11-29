@@ -1,8 +1,11 @@
 import argparse
+import os
+from shutil import rmtree
 from itertools import product
 from typing import Optional
 
 from sklearn.datasets import make_classification
+import numpy as np
 
 from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
 
@@ -10,6 +13,7 @@ from recursive_clustering.experiment.clustering_experiment import ClusteringExpe
 class ClassificationClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
+            *args,
             n_samples: Optional[int] = 100,
             n_random: Optional[int] = 16,
             n_informative: Optional[int] = 2,
@@ -27,7 +31,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             seeds_dataset: Optional[int] = 0,
             **kwargs
     ):
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
         self.n_samples = n_samples
         self.n_random = n_random
         self.n_informative = n_informative
@@ -112,12 +116,26 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         scale = unique_params['scale']
         shuffle = unique_params['shuffle']
         seed_dataset = combination['seed_dataset']
-        X, y = make_classification(n_samples=n_samples, n_features=n_informative + n_redundant + n_repeated + n_random,
-                                   n_informative=n_informative, n_redundant=n_redundant, n_repeated=n_repeated,
-                                   n_classes=n_classes, n_clusters_per_class=n_clusters_per_class, weights=weights,
-                                   flip_y=flip_y, class_sep=class_sep, hypercube=hypercube, shift=shift, scale=scale,
-                                   shuffle=shuffle, random_state=seed_dataset)
-        return {'X': X, 'y': y}
+        dataset_name = (f'classif_{n_samples}_{n_random}_{n_informative}_{n_redundant}_{n_repeated}_{n_classes}_'
+                        f'{n_clusters_per_class}_{weights}_{flip_y}_{class_sep}_{hypercube}_{shift}_{scale}_{shuffle}_'
+                        f'{seed_dataset}')
+        dataset_dir = self.work_root_dir / dataset_name
+        X_file = dataset_dir / 'X.npy'
+        y_file = dataset_dir / 'y.npy'
+        if X_file.exists() and y_file.exists():
+            X = np.load(X_file)
+            y = np.load(y_file)
+        else:
+            X, y = make_classification(n_samples=n_samples,
+                                       n_features=n_informative + n_redundant + n_repeated + n_random,
+                                       n_informative=n_informative, n_redundant=n_redundant, n_repeated=n_repeated,
+                                       n_classes=n_classes, n_clusters_per_class=n_clusters_per_class, weights=weights,
+                                       flip_y=flip_y, class_sep=class_sep, hypercube=hypercube, shift=shift,
+                                       scale=scale, shuffle=shuffle, random_state=seed_dataset)
+            os.makedirs(dataset_dir, exist_ok=True)
+            np.save(X_file, X)
+            np.save(y_file, y)
+        return {'X': X, 'y': y, 'dataset_name': dataset_name}
 
     def run_classification_experiment_combination(
             self, model_nickname: str, seed_model: int = 0, model_params: Optional[dict] = None,

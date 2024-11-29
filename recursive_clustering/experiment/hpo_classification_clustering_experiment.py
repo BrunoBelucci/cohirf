@@ -22,7 +22,7 @@ class HPOClassificationClusteringExperiment(HPOExperiment, ClassificationCluster
             # experiment parameters
             experiment_name=self.experiment_name, create_validation_set=self.create_validation_set,
             log_dir=self.log_dir, log_file_name=self.log_file_name, work_root_dir=self.work_root_dir,
-            save_root_dir=self.save_root_dir, clean_work_dir=self.clean_work_dir,
+            save_root_dir=self.save_root_dir, clean_work_dir=self.clean_work_dir, clean_data_dir=False,
             raise_on_fit_error=self.raise_on_fit_error, error_score=self.error_score, log_to_mlflow=self.log_to_mlflow,
             mlflow_tracking_uri=self.mlflow_tracking_uri, check_if_exists=self.check_if_exists
         )
@@ -33,6 +33,8 @@ class HPOClassificationClusteringExperiment(HPOExperiment, ClassificationCluster
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
+        load_data_return = super()._load_data(combination=combination, unique_params=unique_params,
+                                              extra_params=extra_params, **kwargs)
         return {}
 
 

@@ -1,8 +1,11 @@
 import argparse
 from itertools import product
 from typing import Optional
+import os
+from shutil import rmtree
 
 from sklearn.datasets import make_blobs
+import numpy as np
 
 from recursive_clustering.experiment.open_ml_clustering_experiment import ClusteringExperiment
 
@@ -10,6 +13,7 @@ from recursive_clustering.experiment.open_ml_clustering_experiment import Cluste
 class BlobClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
+            *args,
             n_samples: Optional[int] = 100,
             n_features: Optional[int] = 2,
             centers: Optional[int] = 3,
@@ -19,7 +23,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
             seeds_dataset: Optional[int] = 0,
             **kwargs
     ):
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
         self.n_samples = n_samples
         self.n_features = n_features
         self.centers = centers
@@ -69,9 +73,22 @@ class BlobClusteringExperiment(ClusteringExperiment):
         center_box = unique_params['center_box']
         shuffle = unique_params['shuffle']
         seed_dataset = combination['seed_dataset']
-        X, y = make_blobs(n_samples=n_samples, n_features=n_features, centers=centers, cluster_std=cluster_std,
-                          center_box=center_box, shuffle=shuffle, random_state=seed_dataset)
-        return {'X': X, 'y': y}
+        dataset_name = f'blob_{n_samples}_{n_features}_{centers}_{cluster_std}_{center_box}_{shuffle}_{seed_dataset}'
+        dataset_dir = self.work_root_dir / dataset_name
+        X_file = dataset_dir / 'X.npy'
+        y_file = dataset_dir / 'y.npy'
+        # check if dataset is already saved and load it if it is
+        if os.path.exists(X_file) and os.path.exists(y_file):
+            X = np.load(X_file)
+            y = np.load(y_file)
+        else:
+            X, y = make_blobs(n_samples=n_samples, n_features=n_features, centers=centers, cluster_std=cluster_std,
+                              center_box=center_box, shuffle=shuffle, random_state=seed_dataset)
+            # save on work_dir for later use
+            os.makedirs(dataset_dir, exist_ok=True)
+            np.save(X_file, X)
+            np.save(y_file, y)
+        return {'X': X, 'y': y, 'dataset_name': dataset_name}
 
     def run_blob_experiment_combination(self, model_nickname: str, seed_model: int = 0, seed_dataset: int = 0,
                                         model_params: Optional[dict] = None, fit_params: Optional[dict] = None,

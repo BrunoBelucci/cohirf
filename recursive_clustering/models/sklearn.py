@@ -4,7 +4,7 @@ import optuna
 
 
 def create_search_space_kmeans():
-    search_space = dict(n_clusters=optuna.distributions.IntDistribution(2, 10))
+    search_space = dict(n_clusters=optuna.distributions.IntDistribution(2, 30))
     default_values = dict(n_clusters=8)
     return search_space, default_values
 
@@ -20,14 +20,14 @@ def create_search_space_mean_shift():
 
 
 def create_search_space_spectral_clustering():
-    search_space = dict(n_clusters=optuna.distributions.IntDistribution(2, 10))
-    default_values = dict(n_clusters=8)
+    search_space = dict(n_clusters=optuna.distributions.IntDistribution(2, 30))
+    default_values = dict(n_clusters=15)
     return search_space, default_values
 
 
 def create_search_space_agglomerative_clustering():
-    search_space = dict(n_clusters=optuna.distributions.IntDistribution(2, 10))
-    default_values = dict(n_clusters=8)
+    search_space = dict(n_clusters=optuna.distributions.IntDistribution(2, 30))
+    default_values = dict(n_clusters=15)
     return search_space, default_values
 
 

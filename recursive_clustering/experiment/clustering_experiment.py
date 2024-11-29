@@ -2,6 +2,7 @@ import random
 from copy import deepcopy
 from abc import ABC
 from typing import Optional
+from shutil import rmtree
 
 import mlflow
 import numpy as np
@@ -14,6 +15,24 @@ from recursive_clustering.experiment.tested_models import models_dict
 
 
 class ClusteringExperiment(BaseExperiment, ABC):
+    def __init__(
+            self,
+            *args,
+            clean_data_dir: Optional[bool] = True,
+            **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.clean_data_dir = clean_data_dir
+
+    def _add_arguments_to_parser(self):
+        super()._add_arguments_to_parser()
+        self.parser.add_argument('--do_not_clean_data_dir', action='store_true')
+
+    def _unpack_parser(self):
+        args = super()._unpack_parser()
+        self.clean_data_dir = not args.do_not_clean_data_dir
+        return args
+
     @property
     def models_dict(self):
         return models_dict.copy()
@@ -99,3 +118,14 @@ class ClusteringExperiment(BaseExperiment, ABC):
 
         mlflow.log_params(log_params, run_id=mlflow_run_id)
         mlflow.log_metrics(log_metrics, run_id=mlflow_run_id)
+
+    def _on_exception_or_train_end(self, combination: dict, unique_params: Optional[dict] = None,
+                                   extra_params: Optional[dict] = None, **kwargs):
+        result = super()._on_exception_or_train_end(combination=combination, unique_params=unique_params,
+                                                    extra_params=extra_params, **kwargs)
+        dataset_name = kwargs['load_data_return']['dataset_name']
+        dataset_dir = self.work_root_dir / dataset_name
+        if self.clean_data_dir:
+            if dataset_dir.exists():
+                rmtree(dataset_dir)
+        return result
