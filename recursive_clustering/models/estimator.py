@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator, ClusterMixin
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.utils import check_random_state
 from sklearn.utils.random import sample_without_replacement
 from sklearn.metrics.pairwise import cosine_distances
@@ -21,7 +21,12 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             kmeans_verbose=0,
             random_state=None,
             kmeans_algorithm='lloyd',
-            n_jobs=1
+            # MiniBatchKMeans parameters
+            # kmeans_batch_size=None,
+            # kmeans_max_no_improvement=10,
+            # kmeans_init_size=None,
+            # kmeans_reassignment_ratio=0.01,
+            # n_jobs=1
     ):
         self.components_size = components_size
         self.repetitions = repetitions
@@ -33,7 +38,11 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.kmeans_verbose = kmeans_verbose
         self.random_state = random_state
         self.kmeans_algorithm = kmeans_algorithm
-        self.n_jobs = n_jobs
+        # self.kmeans_batch_size = kmeans_batch_size
+        # self.kmeans_max_no_improvement = kmeans_max_no_improvement
+        # self.kmeans_init_size = kmeans_init_size
+        # self.kmeans_reassignment_ratio = kmeans_reassignment_ratio
+        # self.n_jobs = n_jobs
         self.n_clusters_ = None
         self.labels_ = None
         self.cluster_representatives_ = None
@@ -52,7 +61,18 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
 
         def run_one_repetition(X_j, r):
             repetition_random_sate = check_random_state(random_state.randint(0, 1e6) + r)
-            k_means_estimator = KMeans(n_clusters=self.kmeans_n_clusters, init=self.kmeans_init,
+            n_j_samples = X_j.shape[0]
+            kmeans_n_clusters = min(self.kmeans_n_clusters, n_j_samples)
+            # if n_samples > 1e3 or self.kmeans_batch_size is not None:
+            #     kmeans_batch_size = self.kmeans_batch_size if self.kmeans_batch_size is not None else 1024
+            #     kmeans_cls = MiniBatchKMeans
+            #     extra_kwargs = dict(batch_size=kmeans_batch_size,
+            #                         max_no_improvement=self.kmeans_max_no_improvement,
+            #                         init_size=self.kmeans_init_size, reassignment_ratio=self.kmeans_reassignment_ratio)
+            # else:
+            #     kmeans_cls = KMeans
+            #     extra_kwargs = dict(algorithm=self.kmeans_algorithm)
+            k_means_estimator = KMeans(n_clusters=kmeans_n_clusters, init=self.kmeans_init,
                                        n_init=self.kmeans_n_init,
                                        max_iter=self.kmeans_max_iter, tol=self.kmeans_tol,
                                        verbose=self.kmeans_verbose,

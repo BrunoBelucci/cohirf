@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import argparse
 from itertools import product
 from typing import Optional
 import os
-from shutil import rmtree
 
 from sklearn.datasets import make_blobs
 import numpy as np
@@ -14,13 +15,13 @@ class BlobClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
             *args,
-            n_samples: Optional[int] = 100,
-            n_features: Optional[int] = 2,
+            n_samples: Optional[int | list[int]] = 100,
+            n_features: Optional[int | list[int]] = 2,
             centers: Optional[int] = 3,
             cluster_std: Optional[float] = 1.0,
             center_box: Optional[tuple[float, float]] = (-10.0, 10.0),
             shuffle: Optional[bool] = True,
-            seeds_dataset: Optional[int] = 0,
+            seeds_dataset: Optional[int | list[int]] = 0,
             **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -34,8 +35,8 @@ class BlobClusteringExperiment(ClusteringExperiment):
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
-        self.parser.add_argument('--n_samples', type=int, default=self.n_samples)
-        self.parser.add_argument('--n_features', type=int, default=self.n_features)
+        self.parser.add_argument('--n_samples', type=int, default=self.n_samples, nargs='*')
+        self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
         self.parser.add_argument('--centers', type=int, default=self.centers)
         self.parser.add_argument('--cluster_std', type=float, default=self.cluster_std)
         self.parser.add_argument('--center_box', type=tuple, default=self.center_box)
@@ -54,20 +55,21 @@ class BlobClusteringExperiment(ClusteringExperiment):
         return args
 
     def _get_combinations(self):
-        combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset))
-        combination_names = ['model_nickname', 'seed_model', 'seed_dataset']
+        combinations = list(product(self.models_nickname, self.seeds_models,
+                                    self.seeds_dataset, self.n_samples, self.n_features))
+        combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'n_samples', 'n_features']
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
-        unique_params = dict(n_samples=self.n_samples, n_features=self.n_features, centers=self.centers,
-                             cluster_std=self.cluster_std, center_box=self.center_box, shuffle=self.shuffle)
+        unique_params = dict(centers=self.centers, cluster_std=self.cluster_std, center_box=self.center_box,
+                             shuffle=self.shuffle)
         extra_params = dict(n_jobs=self.n_jobs, return_results=False)
         return combinations, combination_names, unique_params, extra_params
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
-        n_samples = unique_params['n_samples']
-        n_features = unique_params['n_features']
+        n_samples = combination['n_samples']
+        n_features = combination['n_features']
         centers = unique_params['centers']
         cluster_std = unique_params['cluster_std']
         center_box = unique_params['center_box']

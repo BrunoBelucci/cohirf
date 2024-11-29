@@ -57,4 +57,4 @@ SpectralClustering.create_search_space = staticmethod(create_search_space_spectr
 AgglomerativeClustering.create_search_space = staticmethod(create_search_space_agglomerative_clustering)
 DBSCAN.create_search_space = staticmethod(create_search_space_dbscan)
 HDBSCAN.create_search_space = staticmethod(create_search_space_hdbscan)
-OPTICS.create_search_space = staticmethod   (create_search_space_optics)
+OPTICS.create_search_space = staticmethod(create_search_space_optics)
