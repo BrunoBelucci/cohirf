@@ -25,7 +25,11 @@ class BlobClusteringExperiment(ClusteringExperiment):
             **kwargs
     ):
         super().__init__(*args, **kwargs)
+        if isinstance(n_samples, int):
+            n_samples = [n_samples]
         self.n_samples = n_samples
+        if isinstance(n_features, int):
+            n_features = [n_features]
         self.n_features = n_features
         self.centers = centers
         self.cluster_std = cluster_std
@@ -63,7 +67,8 @@ class BlobClusteringExperiment(ClusteringExperiment):
         combination_names += ['model_params', 'fit_params']
         unique_params = dict(centers=self.centers, cluster_std=self.cluster_std, center_box=self.center_box,
                              shuffle=self.shuffle)
-        extra_params = dict(n_jobs=self.n_jobs, return_results=False)
+        extra_params = dict(n_jobs=self.n_jobs, return_results=False, timeout_combination=self.timeout_combination,
+                            timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,

@@ -96,7 +96,8 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
                              n_clusters_per_class=self.n_clusters_per_class, weights=self.weights, flip_y=self.flip_y,
                              class_sep=self.class_sep, hypercube=self.hypercube, shift=self.shift, scale=self.scale,
                              shuffle=self.shuffle)
-        extra_params = dict(n_jobs=self.n_jobs, return_results=False)
+        extra_params = dict(n_jobs=self.n_jobs, return_results=False, timeout_combination=self.timeout_combination,
+                            timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,

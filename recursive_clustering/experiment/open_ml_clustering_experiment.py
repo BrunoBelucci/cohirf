@@ -53,7 +53,8 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
         unique_params = dict()
-        extra_params = dict(n_jobs=self.n_jobs, return_results=False)
+        extra_params = dict(n_jobs=self.n_jobs, return_results=False, timeout_combination=self.timeout_combination,
+                            timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
 
     def run_openml_experiment_combination(

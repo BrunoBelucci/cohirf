@@ -109,11 +109,11 @@ class ClusteringExperiment(BaseExperiment, ABC):
         log_params = {}
         log_metrics = {}
 
-        load_data_return = kwargs['load_data_return']
+        load_data_return = kwargs.get('load_data_return', {})
         if 'dataset_name' in load_data_return:
             log_params['dataset_name'] = load_data_return['dataset_name']
 
-        evaluate_model_return = kwargs['evaluate_model_return']
+        evaluate_model_return = kwargs.get('evaluate_model_return', {})
         log_metrics.update(evaluate_model_return)
 
         mlflow.log_params(log_params, run_id=mlflow_run_id)
@@ -123,9 +123,10 @@ class ClusteringExperiment(BaseExperiment, ABC):
                                    extra_params: Optional[dict] = None, **kwargs):
         result = super()._on_exception_or_train_end(combination=combination, unique_params=unique_params,
                                                     extra_params=extra_params, **kwargs)
-        dataset_name = kwargs['load_data_return']['dataset_name']
-        dataset_dir = self.work_root_dir / dataset_name
-        if self.clean_data_dir:
-            if dataset_dir.exists():
-                rmtree(dataset_dir)
+        dataset_name = kwargs.get('load_data_return', {}).get('dataset_name', None)
+        if dataset_name is not None:
+            dataset_dir = self.work_root_dir / dataset_name
+            if self.clean_data_dir:
+                if dataset_dir.exists():
+                    rmtree(dataset_dir)
         return result
