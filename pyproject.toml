@@ -7,7 +7,7 @@ name = "recursive_clustering"
 version = "0.2"
 description = """recursive_clustering"""
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 license = "MIT"
 authors = [
   { name = "Bruno Belucci", email = "bruno.belucci-teixeira@dauphine.eu" },
