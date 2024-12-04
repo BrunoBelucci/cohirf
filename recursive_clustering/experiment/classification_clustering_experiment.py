@@ -46,6 +46,8 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.shift = shift
         self.scale = scale
         self.shuffle = shuffle
+        if isinstance(seeds_dataset, int):
+            seeds_dataset = [seeds_dataset]
         self.seeds_dataset = seeds_dataset
 
     def _add_arguments_to_parser(self):
@@ -146,6 +148,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             flip_y: float = 0.0, class_sep: float = 1.0, hypercube: bool = True, shift: float = 0.0,
             scale: float = 1.0, shuffle: bool = True,
             n_jobs: int = 1, return_results: bool = True,
+            timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
             log_to_mlflow: bool = False
     ):
 
@@ -175,6 +178,8 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         extra_params = {
             'n_jobs': n_jobs,
             'return_results': return_results,
+            'timeout_combination': timeout_combination,
+            'timeout_fit': timeout_fit,
         }
         if log_to_mlflow:
             return self._run_mlflow_and_train_model(combination=combination, unique_params=unique_params,

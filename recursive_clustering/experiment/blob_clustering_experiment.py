@@ -102,7 +102,9 @@ class BlobClusteringExperiment(ClusteringExperiment):
                                         n_samples: int = 100, n_features: int = 2, centers: int = 3,
                                         cluster_std: float = 1.0,
                                         center_box: tuple[float, float] = (-10.0, 10.0), shuffle: bool = True,
-                                        n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False):
+                                        n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False,
+                                        timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
+                                        ):
         combination = {
             'model_nickname': model_nickname,
             'seed_model': seed_model,
@@ -121,6 +123,8 @@ class BlobClusteringExperiment(ClusteringExperiment):
         extra_params = {
             'n_jobs': n_jobs,
             'return_results': return_results,
+            'timeout_combination': timeout_combination,
+            'timeout_fit': timeout_fit,
         }
         if log_to_mlflow:
             return self._run_mlflow_and_train_model(combination=combination, unique_params=unique_params,

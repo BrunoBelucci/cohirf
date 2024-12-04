@@ -61,7 +61,8 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             self, model_nickname: str, dataset_id: int, seed_model: int = 0, model_params: Optional[dict] = None,
             fit_params: Optional[dict] = None,
             n_jobs: int = 1, return_results: bool = True,
-            log_to_mlflow: bool = False
+            log_to_mlflow: bool = False,
+            timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
     ):
 
         combination = {
@@ -75,6 +76,8 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         extra_params = {
             'n_jobs': n_jobs,
             'return_results': return_results,
+            'timeout_combination': timeout_combination,
+            'timeout_fit': timeout_fit,
         }
         if log_to_mlflow:
             return self._run_mlflow_and_train_model(combination=combination, unique_params=unique_params,
