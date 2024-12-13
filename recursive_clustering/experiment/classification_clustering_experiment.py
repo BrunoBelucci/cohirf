@@ -61,13 +61,13 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         if isinstance(seeds_dataset, int):
             seeds_dataset = [seeds_dataset]
         self.seeds_dataset = seeds_dataset
-        if isinstance(seeds_unified, int):
+        if isinstance(seeds_unified, int) or seeds_unified is None:
             seeds_unified = [seeds_unified]
         self.seeds_unified = seeds_unified
-        if isinstance(n_features, int):
+        if isinstance(n_features, int) or n_features is None:
             n_features = [n_features]
         self.n_features = n_features
-        if isinstance(pct_random, float):
+        if isinstance(pct_random, float) or pct_random is None:
             pct_random = [pct_random]
         self.pct_random = pct_random
 
