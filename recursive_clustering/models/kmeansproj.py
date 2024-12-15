@@ -25,6 +25,7 @@
 # C. options is an optional parameter.
 
 import numpy as np
+import optuna
 from scipy.linalg import svd
 from sklearn.base import ClusterMixin, BaseEstimator
 from sklearn.utils import check_random_state
@@ -256,3 +257,13 @@ class KMeansProj(BaseEstimator, ClusterMixin):
     def fit_predict(self, X, y=None, sample_weight=None):
         self.fit(X, y, sample_weight)
         return self.labels_
+
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            n_clusters=optuna.distributions.IntDistribution(2, 30),
+        )
+        default_values = dict(
+            n_clusters=8,
+        )
+        return search_space, default_values

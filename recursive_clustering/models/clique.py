@@ -1,6 +1,7 @@
 # from https://github.com/georgekatona/Clique/tree/master
 
 import numpy as np
+import optuna
 import scipy.sparse.csgraph
 from sklearn.base import ClusterMixin, BaseEstimator
 
@@ -218,3 +219,15 @@ class Clique(ClusterMixin, BaseEstimator):
     def fit_predict(self, X, y=None, sample_weight=None):
         self.fit(X, y, sample_weight)
         return self.labels_
+
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            n_partitions=optuna.distributions.IntDistribution(5, 200),
+            density_threshold=optuna.distributions.FloatDistribution(0.1, 0.8),
+        )
+        default_values = dict(
+            n_partitions=100,
+            density_threshold=0.5,
+        )
+        return search_space, default_values

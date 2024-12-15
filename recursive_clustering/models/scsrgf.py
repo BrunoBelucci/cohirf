@@ -1,4 +1,5 @@
 import numpy as np
+import optuna
 from scipy.sparse import csr_matrix, issparse
 from sklearn.base import ClusterMixin, BaseEstimator
 from sklearn.cluster import SpectralClustering
@@ -80,7 +81,6 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             self,
             knn=5,
             n_similarities=20,
-            t_swaps=20,
             alpha=1.0,
             sampling_ratio=0.5,
             sc_n_clusters=8,
@@ -94,7 +94,6 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
     ):
         self.knn = knn
         self.n_similarities = n_similarities
-        self.t_swaps = t_swaps
         self.alpha = alpha
         self.sampling_ratio = sampling_ratio
         self.sc_n_clusters = sc_n_clusters
@@ -116,7 +115,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             similarity_matrix = knn_sparse(X_i, self.knn)
             all_matrices.append(similarity_matrix)
 
-        fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.t_swaps, alpha=self.alpha)
+        fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha)
         spectral_clustering = SpectralClustering(
             n_clusters=self.sc_n_clusters,
             eigen_solver=self.sc_eigen_solver,
@@ -133,3 +132,17 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
 
     def fit_predict(self, X, y=None, sample_weight=None):
         return self.fit(X).labels_
+
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            n_similarities=optuna.distributions.IntDistribution(10, 30),
+            sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+            sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
+        )
+        default_values = dict(
+            n_similarities=20,
+            sampling_ratio=0.5,
+            sc_n_clusters=8,
+        )
+        return search_space, default_values

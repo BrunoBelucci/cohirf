@@ -1,6 +1,7 @@
 # based on matlab code from https://github.com/wangzhi-swu/IRFLLRR/tree/main
 
 import numpy as np
+import optuna
 from scipy.linalg import orth, svd
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.cluster import SpectralClustering
@@ -175,3 +176,22 @@ class IRFLLRR(ClusterMixin, BaseEstimator):
     def fit_predict(self, X, y=None, sample_weight=None):
         self.fit(X, y, sample_weight)
         return self.labels_
+
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            p=optuna.distributions.FloatDistribution(0.0, 1.0),
+            c=optuna.distributions.CategoricalDistribution([1e-3, 1e-2, 1e-1, 1.0, 1e1, 1e2]),
+            lambda_=optuna.distributions.CategoricalDistribution([1e-3, 1e-2, 1e-1, 1.0, 1e1, 1e2]),
+            alpha=optuna.distributions.FloatDistribution(1.0, 4.0),
+            sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
+        )
+        default_values = dict(
+            p=0.95,
+            c=0.11,
+            lambda_=1,
+            alpha=4,
+            sc_n_clusters=8,
+        )
+        return search_space, default_values
+
