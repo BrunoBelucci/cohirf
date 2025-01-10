@@ -124,7 +124,7 @@ class IRFLLRR(ClusterMixin, BaseEstimator):
             alpha=4,
             lambda_=1,
             p=0.95,
-            c=0.11,
+            c=0.10,
             k=3,
             sc_n_clusters=8,
             sc_eigen_solver=None,
@@ -188,7 +188,7 @@ class IRFLLRR(ClusterMixin, BaseEstimator):
         )
         default_values = dict(
             p=0.95,
-            c=0.11,
+            c=0.10,
             lambda_=1,
             alpha=4,
             sc_n_clusters=8,
