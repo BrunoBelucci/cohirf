@@ -205,6 +205,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             n_repeated: int = 0, n_classes: int = 2, n_clusters_per_class: int = 1, weights: Optional[list] = None,
             flip_y: float = 0.0, class_sep: float = 1.0, hypercube: bool = True, shift: float = 0.0,
             scale: float = 1.0, shuffle: bool = True,
+            n_features: Optional[int] = None, pct_random: Optional[float] = None, seed_unified: Optional[int] = None,
             n_jobs: int = 1, return_results: bool = True,
             timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
             log_to_mlflow: bool = False
@@ -216,18 +217,21 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             'seed_dataset': seed_dataset,
             'model_params': model_params,
             'fit_params': fit_params,
-        }
-        unique_params = {
             'n_samples': n_samples,
             'n_random': n_random,
             'n_informative': n_informative,
+            'class_sep': class_sep,
+            'n_features': n_features,
+            'pct_random': pct_random,
+            'seed_unified': seed_unified,
+        }
+        unique_params = {
             'n_redundant': n_redundant,
             'n_repeated': n_repeated,
             'n_classes': n_classes,
             'n_clusters_per_class': n_clusters_per_class,
             'weights': weights,
             'flip_y': flip_y,
-            'class_sep': class_sep,
             'hypercube': hypercube,
             'shift': shift,
             'scale': scale,
