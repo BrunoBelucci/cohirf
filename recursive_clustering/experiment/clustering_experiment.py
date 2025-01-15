@@ -6,6 +6,7 @@ from shutil import rmtree
 
 import mlflow
 import numpy as np
+from graphql.pyutils.is_iterable import not_iterable_types
 from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score, adjusted_mutual_info_score,
                              normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score)
 
@@ -112,6 +113,16 @@ class ClusteringExperiment(BaseExperiment, ABC):
         load_data_return = kwargs.get('load_data_return', {})
         if 'dataset_name' in load_data_return:
             log_params['dataset_name'] = load_data_return['dataset_name']
+
+        model_nickname = combination.get('model_nickname', None)
+        if model_nickname == 'RecursiveClustering':
+            load_model_return = kwargs.get('load_model_return', {})
+            model = load_model_return.get('model', None)
+            n_iter_ = model.n_iter_
+            log_metrics['n_iter_'] = n_iter_
+            n_clusters_iter_ = model.n_clusters_iter_
+            for i, n_clusters in enumerate(n_clusters_iter_):
+                mlflow.log_metrics({'n_clusters_iter_': n_clusters}, step=i, run_id=mlflow_run_id)
 
         evaluate_model_return = kwargs.get('evaluate_model_return', {})
         log_metrics.update(evaluate_model_return)

@@ -47,6 +47,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.labels_ = None
         self.cluster_representatives_ = None
         self.cluster_representatives_labels_ = None
+        self.n_iter_ = None
+        self.n_clusters_iter_ = []
 
     def fit(self, X, y=None, sample_weight=None):
         n_samples = X.shape[0]
@@ -102,6 +104,9 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # factorize labels using numpy
             labels_i = np.array(labels_i).T
             unique_labels, codes = np.unique(labels_i, axis=0, return_inverse=True)
+
+            # store for development/experimentation purposes
+            self.n_clusters_iter_.append(len(unique_labels))
 
             # add to the sequence of labels
             if i == 0:
@@ -162,6 +167,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.labels_ = label_sequence[:, -1]
         self.cluster_representatives_ = X_j
         self.cluster_representatives_labels_ = np.unique(codes)
+        self.n_iter_ = i
         return self
 
     def fit_predict(self, X, y=None, sample_weight=None):
