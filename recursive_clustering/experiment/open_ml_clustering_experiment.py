@@ -1,7 +1,8 @@
 import argparse
 from itertools import product
 from typing import Optional
-
+import numpy as np
+import pandas as pd
 import openml
 
 from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
@@ -32,9 +33,27 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         target = dataset.default_target_attribute
         X, y, cat_ind, att_names = dataset.get_data(target=target)
         cat_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is True]
+        cont_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is False]
         cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
         n_classes = len(y.unique())
         dataset_name = dataset.name
+        # we will preprocess the data always in the same way
+        # categorical features
+        # we will convert categorical features to codes
+        for cat_feature in cat_features_names:
+            X[cat_feature] = X[cat_feature].cat.codes
+            X[cat_feature] = X[cat_feature].replace(-1, np.nan).astype('category')
+        # we will fill missing values with the most frequent value
+        X[cat_features_names] = X[cat_features_names].fillna(X[cat_features_names].mode().iloc[0])
+        # we will one hot encode the categorical features and convert them to float
+        X = pd.get_dummies(X, columns=cat_features_names, dtype=float)
+        # continuous features
+        # we will fill missing values with the median
+        X[cont_features_names] = X[cont_features_names].fillna(X[cont_features_names].median())
+        # we will standardize the continuous features
+        X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
+        # we will cast them to float
+        X[cont_features_names] = X[cont_features_names].astype(float)
         return {
             'X': X,
             'y': y,
