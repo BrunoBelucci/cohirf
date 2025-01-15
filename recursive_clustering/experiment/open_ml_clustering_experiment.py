@@ -39,21 +39,25 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         dataset_name = dataset.name
         # we will preprocess the data always in the same way
         # categorical features
-        # we will convert categorical features to codes
-        for cat_feature in cat_features_names:
-            X[cat_feature] = X[cat_feature].cat.codes
-            X[cat_feature] = X[cat_feature].replace(-1, np.nan).astype('category')
-        # we will fill missing values with the most frequent value
-        X[cat_features_names] = X[cat_features_names].fillna(X[cat_features_names].mode().iloc[0])
-        # we will one hot encode the categorical features and convert them to float
-        X = pd.get_dummies(X, columns=cat_features_names, dtype=float)
+        if cat_features_names:
+            # we will convert categorical features to codes
+            for cat_feature in cat_features_names:
+                X[cat_feature] = X[cat_feature].cat.codes
+                X[cat_feature] = X[cat_feature].replace(-1, np.nan).astype('category')
+            # we will fill missing values with the most frequent value
+            X[cat_features_names] = X[cat_features_names].fillna(X[cat_features_names].mode().iloc[0])
+            # we will one hot encode the categorical features and convert them to float
+            X = pd.get_dummies(X, columns=cat_features_names, dtype=float)
         # continuous features
-        # we will fill missing values with the median
-        X[cont_features_names] = X[cont_features_names].fillna(X[cont_features_names].median())
-        # we will standardize the continuous features
-        X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
-        # we will cast them to float
-        X[cont_features_names] = X[cont_features_names].astype(float)
+        if cont_features_names:
+            # we will fill missing values with the median
+            X[cont_features_names] = X[cont_features_names].fillna(X[cont_features_names].median())
+            # we will standardize the continuous features
+            X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
+            # we will cast them to float
+            X[cont_features_names] = X[cont_features_names].astype(float)
+        # we will drop 0 variance features
+        X = X.dropna(axis=1, how='all')
         return {
             'X': X,
             'y': y,
