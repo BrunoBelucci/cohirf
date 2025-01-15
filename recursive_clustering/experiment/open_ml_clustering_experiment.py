@@ -1,6 +1,8 @@
 import argparse
 from itertools import product
 from typing import Optional
+
+import mlflow
 import numpy as np
 import pandas as pd
 import openml
@@ -58,6 +60,15 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             X[cont_features_names] = X[cont_features_names].astype(float)
         # we will drop 0 variance features
         X = X.dropna(axis=1, how='all')
+
+        # log to mlflow to facilitate analysis
+        mlflow_run_id = extra_params.get('mlflow_run_id', None)
+        if mlflow_run_id is not None:
+            mlflow.log_params({
+                'n_samples': X.shape[0],
+                'n_features': X.shape[1],
+                'n_classes': n_classes,
+            }, run_id=mlflow_run_id)
         return {
             'X': X,
             'y': y,
