@@ -111,10 +111,10 @@ class BlobClusteringExperiment(ClusteringExperiment):
             'seed_dataset': seed_dataset,
             'model_params': model_params,
             'fit_params': fit_params,
-        }
-        unique_params = {
             'n_samples': n_samples,
             'n_features': n_features,
+        }
+        unique_params = {
             'centers': centers,
             'cluster_std': cluster_std,
             'center_box': center_box,
