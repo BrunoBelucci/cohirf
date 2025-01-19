@@ -59,7 +59,14 @@ class CSVClusteringExperiment(ClusteringExperiment):
             # we will fill missing values with the most frequent value
             X[cat_features_names] = X[cat_features_names].fillna(X[cat_features_names].mode().iloc[0])
             # we will one hot encode the categorical features and convert them to float
-            X = pd.get_dummies(X, columns=cat_features_names, dtype=float)
+            # but only if they have less than 10 categories, else we drop them
+            cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
+            cat_features_names_more_10 = [cat_feature for cat_feature, cat_dim in zip(cat_features_names, cat_dims) if
+                                          cat_dim < 10]
+            X = pd.get_dummies(X, columns=cat_features_names_more_10, drop_first=True)
+            cat_features_drop = [cat_feature for cat_feature in cat_features_names if
+                                 cat_feature not in cat_features_names_more_10]
+            X = X.drop(columns=cat_features_drop)
         # continuous features
         if cont_features_names:
             # we will fill missing values with the median
