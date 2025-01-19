@@ -1,0 +1,2 @@
+dataset_name;X_path;y_path;cat_features
+fma;data/fma_metadata/X.csv;data/fma_metadata/y.csv;8,9,11,13,14
