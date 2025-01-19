@@ -80,7 +80,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                                        verbose=self.kmeans_verbose,
                                        random_state=repetition_random_sate, algorithm=self.kmeans_algorithm)
             # random sample of components
-            components = sample_without_replacement(n_components, self.components_size,
+            components = sample_without_replacement(n_components, min(self.components_size, n_components),
                                                     random_state=repetition_random_sate)
             X_p = X_j[:, components]
             labels_r = k_means_estimator.fit_predict(X_p)
