@@ -118,11 +118,12 @@ class ClusteringExperiment(BaseExperiment, ABC):
         if model_nickname == 'RecursiveClustering':
             load_model_return = kwargs.get('load_model_return', {})
             model = load_model_return.get('model', None)
-            n_iter_ = model.n_iter_
-            log_metrics['n_iter_'] = n_iter_
-            n_clusters_iter_ = model.n_clusters_iter_
-            for i, n_clusters in enumerate(n_clusters_iter_):
-                mlflow.log_metrics({'n_clusters_iter_': n_clusters}, step=i, run_id=mlflow_run_id)
+            if model is not None:
+                n_iter_ = model.n_iter_
+                log_metrics['n_iter_'] = n_iter_
+                n_clusters_iter_ = model.n_clusters_iter_
+                for i, n_clusters in enumerate(n_clusters_iter_):
+                    mlflow.log_metrics({'n_clusters_iter_': n_clusters}, step=i, run_id=mlflow_run_id)
 
         evaluate_model_return = kwargs.get('evaluate_model_return', {})
         log_metrics.update(evaluate_model_return)
