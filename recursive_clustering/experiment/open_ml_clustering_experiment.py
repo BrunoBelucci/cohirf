@@ -6,6 +6,7 @@ import mlflow
 import numpy as np
 import pandas as pd
 import openml
+from patsy.state import standardize
 
 from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
 
@@ -14,23 +15,28 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
             datasets_ids: Optional[list[int]] = None,
+            standardize: Optional[bool] = False,
             **kwargs
     ):
         super().__init__(**kwargs)
         self.datasets_ids = datasets_ids
+        self.standardize = standardize
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
         self.parser.add_argument('--datasets_ids', type=int, nargs='*')
+        self.parser.add_argument('--standardize', action='store_true')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.datasets_ids = args.datasets_ids
+        self.standardize = args.standardize
         return args
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
         dataset_id = combination['dataset_id']
+        standardize = unique_params['standardize']
         dataset = openml.datasets.get_dataset(dataset_id)
         target = dataset.default_target_attribute
         X, y, cat_ind, att_names = dataset.get_data(target=target)
@@ -62,7 +68,8 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             # we will fill missing values with the median
             X[cont_features_names] = X[cont_features_names].fillna(X[cont_features_names].median())
             # we will standardize the continuous features
-            X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
+            if standardize:
+                X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
             # we will cast them to float
             X[cont_features_names] = X[cont_features_names].astype(float)
         # we will drop 0 variance features
@@ -93,7 +100,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
-        unique_params = dict()
+        unique_params = dict(standardize=self.standardize)
         extra_params = dict(n_jobs=self.n_jobs, return_results=False, timeout_combination=self.timeout_combination,
                             timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
@@ -126,6 +133,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         else:
             return self._train_model(combination=combination, unique_params=unique_params, extra_params=extra_params,
                                      return_results=return_results)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
