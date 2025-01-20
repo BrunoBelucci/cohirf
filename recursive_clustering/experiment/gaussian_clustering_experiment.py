@@ -47,7 +47,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument('--n_centers', type=int, default=self.n_centers, nargs='*')
         self.parser.add_argument('--distances', type=float, default=self.distances, nargs='*')
         self.parser.add_argument('--seeds_dataset', type=int, default=self.seeds_dataset, nargs='*')
-        self.parser.add_argument('--seeds_unified', type=int, nargs='*')
+        self.parser.add_argument('--seeds_unified', type=int, default=self.seeds_unified, nargs='*')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -56,6 +56,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.n_centers = args.n_centers
         self.distances = args.distances
         self.seeds_dataset = args.seeds_dataset
+        self.seeds_unified = args.seeds_unified
         return args
 
     def _get_combinations(self):
