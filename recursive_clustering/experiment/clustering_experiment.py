@@ -3,12 +3,12 @@ from copy import deepcopy
 from abc import ABC
 from typing import Optional
 from shutil import rmtree
-
+from functools import partial
 import mlflow
 import numpy as np
-from graphql.pyutils.is_iterable import not_iterable_types
 from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score, adjusted_mutual_info_score,
-                             normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score)
+                             normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score,
+                             calinski_harabasz_score)
 
 
 from ml_experiments.base_experiment import BaseExperiment
@@ -65,7 +65,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'adjusted_mutual_info': adjusted_mutual_info_score,
             'normalized_mutual_info': normalized_mutual_info_score,
             'homogeneity_completeness_v_measure': homogeneity_completeness_v_measure,
-            'silhouette': silhouette_score,
+            'silhouette': partial(silhouette_score, sample_size=1000),
+            # 'calinski_harabasz_score': calinski_harabasz_score,
         }
         return scores
 
@@ -95,6 +96,11 @@ class ClusteringExperiment(BaseExperiment, ABC):
                         results['silhouette'] = score_fn(X, y_pred)
                     except ValueError:
                         results['silhouette'] = -1
+                elif score_name == 'calinski_harabasz_score':
+                    try:
+                        results['calinski_harabasz_score'] = score_fn(X, y_pred)
+                    except ValueError:
+                        results['calinski_harabasz_score'] = -1
                 else:
                     results[score_name] = score_fn(y_true, y_pred)
         return results
