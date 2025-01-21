@@ -66,7 +66,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'normalized_mutual_info': normalized_mutual_info_score,
             'homogeneity_completeness_v_measure': homogeneity_completeness_v_measure,
             'silhouette': partial(silhouette_score, sample_size=1000),
-            # 'calinski_harabasz_score': calinski_harabasz_score,
+            'calinski_harabasz_score': calinski_harabasz_score,
         }
         return scores
 
