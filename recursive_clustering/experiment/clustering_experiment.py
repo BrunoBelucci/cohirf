@@ -34,6 +34,10 @@ def inertia_score(X, y):
     inertia = 0.0
     unique_labels = np.unique(y)
 
+    # Ensure X is a NumPy array
+    if not isinstance(X, np.ndarray):
+        X = X.to_numpy()
+
     for label in unique_labels:
         # Extract points belonging to the current cluster
         cluster_points = X[y == label]
