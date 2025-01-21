@@ -92,7 +92,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             X = np.load(X_file)
             y = np.load(y_file)
         else:
-            np.random.seed(seed_dataset)
+            rng = np.random.default_rng(seed_dataset)
             # Generate equally spaced centers using a regular simplex
             # Start with a random orthonormal basis in P dimensions
             centers = np.random.randn(n_centers, n_features)
@@ -106,7 +106,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             X = []
             y = []
             for i, mean in enumerate(centers):
-                cluster_samples = np.random.multivariate_normal(mean, cov, size=n_samples)
+                cluster_samples = rng.multivariate_normal(mean, cov, n_samples, method='cholesky')
                 X.append(cluster_samples)
                 y.extend([i] * n_samples)
             X = np.vstack(X)
@@ -121,14 +121,15 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             np.save(y_file, y)
         return {'X': X, 'y': y, 'dataset_name': dataset_name}
 
-    def run_blob_experiment_combination(self, model_nickname: str, seed_model: int = 0, seed_dataset: int = 0,
-                                        seed_unified: Optional[int] = None,
-                                        model_params: Optional[dict] = None, fit_params: Optional[dict] = None,
-                                        n_samples: int = 100, n_features: int = 2, n_centers: int = 3,
-                                        distance: float = 1.0,
-                                        n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False,
-                                        timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
-                                        ):
+    def run_gaussian_experiment_combination(self, model_nickname: str, seed_model: int = 0, seed_dataset: int = 0,
+                                            seed_unified: Optional[int] = None,
+                                            model_params: Optional[dict] = None, fit_params: Optional[dict] = None,
+                                            n_samples: int = 100, n_features: int = 2, n_centers: int = 3,
+                                            distance: float = 1.0,
+                                            n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False,
+                                            timeout_combination: Optional[int] = None,
+                                            timeout_fit: Optional[int] = None,
+                                            ):
         combination = {
             'model_nickname': model_nickname,
             'seed_model': seed_model,
