@@ -8,11 +8,46 @@ import mlflow
 import numpy as np
 from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score, adjusted_mutual_info_score,
                              normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score,
-                             calinski_harabasz_score)
+                             calinski_harabasz_score, davies_bouldin_score)
+from sklearn.metrics.pairwise import euclidean_distances
 
 
 from ml_experiments.base_experiment import BaseExperiment
 from recursive_clustering.experiment.tested_models import models_dict
+
+
+def inertia_score(X, y):
+    """
+    Calculate the inertia score for a clustering result.
+
+    Parameters:
+    X : np.ndarray
+        The data points, shape (n_samples, n_features).
+    y : np.ndarray
+        The assigned cluster labels, shape (n_samples,).
+
+    Returns:
+    float
+        The inertia score.
+    """
+    # obs not optimized, but should work for testing purposes
+    inertia = 0.0
+    unique_labels = np.unique(y)
+
+    for label in unique_labels:
+        # Extract points belonging to the current cluster
+        cluster_points = X[y == label]
+
+        # Calculate the centroid of the cluster
+        centroid = cluster_points.mean(axis=0)
+
+        # Calculate the squared distances of points to the centroid
+        distances = euclidean_distances(cluster_points, centroid.reshape(1, -1))**2
+
+        # Sum the squared distances to the inertia
+        inertia += distances.sum()
+
+    return inertia
 
 
 class ClusteringExperiment(BaseExperiment, ABC):
@@ -67,6 +102,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'homogeneity_completeness_v_measure': homogeneity_completeness_v_measure,
             'silhouette': partial(silhouette_score, sample_size=1000),
             'calinski_harabasz_score': calinski_harabasz_score,
+            'davies_bouldin_score': davies_bouldin_score,
+            'inertia_score': inertia_score,
         }
         return scores
 
@@ -101,6 +138,16 @@ class ClusteringExperiment(BaseExperiment, ABC):
                         results['calinski_harabasz_score'] = score_fn(X, y_pred)
                     except ValueError:
                         results['calinski_harabasz_score'] = -1
+                elif score_name == 'davies_bouldin_score':
+                    try:
+                        results['davies_bouldin_score'] = score_fn(X, y_pred)
+                    except ValueError:
+                        results['davies_bouldin_score'] = 1e3
+                elif score_name == 'inertia_score':
+                    try:
+                        results['inertia_score'] = score_fn(X, y_pred)
+                    except ValueError:
+                        results['inertia_score'] = -1
                 else:
                     results[score_name] = score_fn(y_true, y_pred)
         return results
