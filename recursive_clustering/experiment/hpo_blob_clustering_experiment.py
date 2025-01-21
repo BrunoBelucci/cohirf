@@ -23,15 +23,6 @@ class HPOBlobClusteringExperiment(HPOExperiment, BlobClusteringExperiment):
         )
         return blob_clustering_experiment
 
-    def _get_tell_metric_from_results(self, results):
-        evaluate_model_return = results.get('evaluate_model_return', {})
-        if not evaluate_model_return:
-            if self.direction == 'maximize':
-                return -float('inf')
-            else:
-                return float('inf')
-        return evaluate_model_return['silhouette']
-
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
         # load the data and save it to disk, but do not return it here
