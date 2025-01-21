@@ -26,6 +26,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # kmeans_max_no_improvement=10,
             # kmeans_init_size=None,
             # kmeans_reassignment_ratio=0.01,
+            normalization=False,
             n_jobs=1
     ):
         self.components_size = components_size
@@ -38,6 +39,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.kmeans_verbose = kmeans_verbose
         self.random_state = random_state
         self.kmeans_algorithm = kmeans_algorithm
+        self.normalization = normalization
         # self.kmeans_batch_size = kmeans_batch_size
         # self.kmeans_max_no_improvement = kmeans_max_no_improvement
         # self.kmeans_init_size = kmeans_init_size
@@ -83,7 +85,16 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             components = sample_without_replacement(n_components, min(self.components_size, n_components),
                                                     random_state=repetition_random_sate)
             X_p = X_j[:, components]
+            if self.normalization:
+                # normalize data
+                mean = X_p.mean(axis=0)
+                std = X_p.std(axis=0)
+                std[std == 0] = 1
+                X_p = (X_p - mean) / std
             labels_r = k_means_estimator.fit_predict(X_p)
+            # data back to original scale
+            if self.normalization:
+                X_p = X_p * std + mean
             return labels_r
 
         X_j = X
