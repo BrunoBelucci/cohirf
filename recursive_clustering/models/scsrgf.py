@@ -107,6 +107,8 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
         self.labels_ = None
 
     def fit(self, X, y=None, sample_weight=None):
+        if not isinstance(X, np.ndarray):
+            X = X.to_numpy()
         random_state = check_random_state(self.random_state)
         all_matrices = []
         for i in range(self.n_similarities):
