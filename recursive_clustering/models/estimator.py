@@ -26,7 +26,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # kmeans_max_no_improvement=10,
             # kmeans_init_size=None,
             # kmeans_reassignment_ratio=0.01,
-            normalization=False,
+            # normalization=False,
+            store_labels=False,
             n_jobs=1
     ):
         self.components_size = components_size
@@ -39,7 +40,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.kmeans_verbose = kmeans_verbose
         self.random_state = random_state
         self.kmeans_algorithm = kmeans_algorithm
-        self.normalization = normalization
+        # self.normalization = normalization
         # self.kmeans_batch_size = kmeans_batch_size
         # self.kmeans_max_no_improvement = kmeans_max_no_improvement
         # self.kmeans_init_size = kmeans_init_size
@@ -51,6 +52,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.cluster_representatives_labels_ = None
         self.n_iter_ = None
         self.n_clusters_iter_ = []
+        self.labels_sequence_ = None
 
     def fit(self, X, y=None, sample_weight=None):
         n_samples = X.shape[0]
@@ -61,7 +63,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         if not isinstance(X, np.ndarray):
             X = X.to_numpy()
 
-        label_sequence = np.empty((n_samples, 0), dtype=int)
+        self.labels_sequence_ = np.empty((n_samples, 0), dtype=int)
 
         def run_one_repetition(X_j, r):
             repetition_random_sate = check_random_state(random_state.randint(0, 1e6) + r)
@@ -85,16 +87,16 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             components = sample_without_replacement(n_components, min(self.components_size, n_components),
                                                     random_state=repetition_random_sate)
             X_p = X_j[:, components]
-            if self.normalization:
-                # normalize data
-                mean = X_p.mean(axis=0)
-                std = X_p.std(axis=0)
-                std[std == 0] = 1
-                X_p = (X_p - mean) / std
+            # if self.normalization:
+            #     # normalize data
+            #     mean = X_p.mean(axis=0)
+            #     std = X_p.std(axis=0)
+            #     std[std == 0] = 1
+            #     X_p = (X_p - mean) / std
             labels_r = k_means_estimator.fit_predict(X_p)
             # data back to original scale
-            if self.normalization:
-                X_p = X_p * std + mean
+            # if self.normalization:
+            #     X_p = X_p * std + mean
             return labels_r
 
         X_j = X
@@ -123,7 +125,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             if i == 0:
                 # every sample is present in the first iteration
                 label_sequence_i = codes
-                label_sequence = np.concatenate((label_sequence, label_sequence_i[:, None]), axis=1)
+                label_sequence = np.concatenate((self.labels_sequence_, label_sequence_i[:, None]), axis=1)
             else:
                 # only some samples are present in the following iterations
                 # so we need to add the same label as the representative sample to the rest of the samples
@@ -131,7 +133,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 for j, cluster_idxs in enumerate(global_clusters_indexes_i):
                     cluster_label = codes[j]
                     label_sequence_i[cluster_idxs] = cluster_label
-                label_sequence = np.concatenate((label_sequence, label_sequence_i), axis=1)
+                label_sequence = np.concatenate((self.labels_sequence_, label_sequence_i), axis=1)
                 # we could replace it with something like
                 # label_sequence_i = np.empty((n_samples), dtype=int)
                 # # Concatenate all cluster indexes and corresponding codes into arrays
@@ -175,7 +177,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             i += 1
 
         self.n_clusters_ = len(unique_labels)
-        self.labels_ = label_sequence[:, -1]
+        self.labels_ = self.labels_sequence_[:, -1]
         self.cluster_representatives_ = X_j
         self.cluster_representatives_labels_ = np.unique(codes)
         self.n_iter_ = i
