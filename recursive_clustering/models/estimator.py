@@ -27,7 +27,6 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # kmeans_init_size=None,
             # kmeans_reassignment_ratio=0.01,
             # normalization=False,
-            store_labels=False,
             n_jobs=1
     ):
         self.components_size = components_size
@@ -125,7 +124,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             if i == 0:
                 # every sample is present in the first iteration
                 label_sequence_i = codes
-                label_sequence = np.concatenate((self.labels_sequence_, label_sequence_i[:, None]), axis=1)
+                self.labels_sequence_ = np.concatenate((self.labels_sequence_, label_sequence_i[:, None]), axis=1)
             else:
                 # only some samples are present in the following iterations
                 # so we need to add the same label as the representative sample to the rest of the samples
@@ -133,7 +132,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 for j, cluster_idxs in enumerate(global_clusters_indexes_i):
                     cluster_label = codes[j]
                     label_sequence_i[cluster_idxs] = cluster_label
-                label_sequence = np.concatenate((self.labels_sequence_, label_sequence_i), axis=1)
+                self.labels_sequence_ = np.concatenate((self.labels_sequence_, label_sequence_i), axis=1)
                 # we could replace it with something like
                 # label_sequence_i = np.empty((n_samples), dtype=int)
                 # # Concatenate all cluster indexes and corresponding codes into arrays
