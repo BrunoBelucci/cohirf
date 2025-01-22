@@ -1,14 +1,14 @@
 import argparse
 from itertools import product
 from typing import Optional
-
 import mlflow
 import numpy as np
 import pandas as pd
-import openml
-from patsy.state import standardize
 
 from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
+
+import openml
+openml.config.server = "http://145.38.195.79/api/v1/xml" # Point to the read-only server
 
 
 class OpenmlClusteringExperiment(ClusteringExperiment):
@@ -107,7 +107,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
 
     def run_openml_experiment_combination(
             self, model_nickname: str, dataset_id: int, seed_model: int = 0, model_params: Optional[dict] = None,
-            fit_params: Optional[dict] = None,
+            fit_params: Optional[dict] = None, standardize: bool = False,
             n_jobs: int = 1, return_results: bool = True,
             log_to_mlflow: bool = False,
             timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
@@ -120,7 +120,9 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             'model_params': model_params,
             'fit_params': fit_params,
         }
-        unique_params = {}
+        unique_params = {
+            'standardize': standardize,
+        }
         extra_params = {
             'n_jobs': n_jobs,
             'return_results': return_results,
