@@ -4,11 +4,7 @@ from typing import Optional
 import mlflow
 import numpy as np
 import pandas as pd
-
 from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
-
-import openml
-openml.config.server = "http://145.38.195.79/api/v1/xml" # Point to the read-only server
 
 
 class OpenmlClusteringExperiment(ClusteringExperiment):
