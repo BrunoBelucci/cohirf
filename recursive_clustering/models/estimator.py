@@ -182,8 +182,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # we arbitrarily pick the first sample as the representative of the cluster and change its
                     # values to the centroid values so we can use the same logic as the other methods
                     closest_sample_idx = local_cluster_idx[0]
-                    X_j[closest_sample_idx, :] = centroid
-                    # we also need to change the original value in X
+                    # we need to change the original value in X
                     X[closest_sample_idx, :] = centroid
                     X_j_indexes_i[j] = closest_sample_idx
 
