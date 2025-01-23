@@ -21,6 +21,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             kmeans_verbose=0,
             random_state=None,
             kmeans_algorithm='lloyd',
+            representative_method='closest_overall',
             # MiniBatchKMeans parameters
             # kmeans_batch_size=None,
             # kmeans_max_no_improvement=10,
@@ -39,6 +40,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.kmeans_verbose = kmeans_verbose
         self.random_state = random_state
         self.kmeans_algorithm = kmeans_algorithm
+        self.representative_method = representative_method
         # self.normalization = normalization
         # self.kmeans_batch_size = kmeans_batch_size
         # self.kmeans_max_no_improvement = kmeans_max_no_improvement
@@ -158,10 +160,33 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 if X_j_indexes_i_last is not None:
                     local_cluster_idx = X_j_indexes_i_last[local_cluster_idx]
                 local_cluster = X[local_cluster_idx, :]
-                local_cluster_distances = cosine_distances(local_cluster)
-                local_cluster_distances_sum = local_cluster_distances.sum(axis=0)
-                closest_sample_idx = local_cluster_idx[np.argmin(local_cluster_distances_sum)]
-                X_j_indexes_i[j] = closest_sample_idx
+
+                if self.representative_method == 'closest_overall':
+                    # calculate the distances between all samples in the cluster and pick the one with the smallest sum
+                    # this is the most computationally expensive method (O(n^2))
+                    local_cluster_distances = cosine_distances(local_cluster)
+                    local_cluster_distances_sum = local_cluster_distances.sum(axis=0)
+                    closest_sample_idx = local_cluster_idx[np.argmin(local_cluster_distances_sum)]
+                    X_j_indexes_i[j] = closest_sample_idx
+                elif self.representative_method == 'closest_to_centroid':
+                    # calculate the centroid of the cluster and pick the sample closest to it
+                    # this is the second most computationally expensive method (O(n))
+                    centroid = local_cluster.mean(axis=0)
+                    local_cluster_distances = cosine_distances(local_cluster, centroid.reshape(1, -1))
+                    closest_sample_idx = local_cluster_idx[np.argmin(local_cluster_distances)]
+                    X_j_indexes_i[j] = closest_sample_idx
+                elif self.representative_method == 'centroid':
+                    # calculate the centroid of the cluster and use it as the representative sample
+                    # this is the least computationally expensive method (O(1))
+                    centroid = local_cluster.mean(axis=0)
+                    # we arbitrarily pick the first sample as the representative of the cluster and change its
+                    # values to the centroid values so we can use the same logic as the other methods
+                    closest_sample_idx = local_cluster_idx[0]
+                    X_j[closest_sample_idx, :] = centroid
+                    # we also need to change the original value in X
+                    X[closest_sample_idx, :] = centroid
+                    X_j_indexes_i[j] = closest_sample_idx
+
                 global_cluster_idx = np.where(label_sequence_i == code)[0]
                 global_clusters_indexes_i.append(global_cluster_idx)
 
