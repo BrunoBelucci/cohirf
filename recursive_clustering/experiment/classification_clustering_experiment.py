@@ -16,9 +16,9 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             self,
             *args,
             n_samples: Optional[int | list[int]] = 100,
-            n_random: Optional[int | list[int]] = 16,
-            n_informative: Optional[int | list[int]] = 2,
-            n_redundant: Optional[int] = 2,
+            n_random: Optional[int | list[int]] = None,
+            n_informative: Optional[int | list[int]] = None,
+            n_redundant: Optional[int] = 0,
             n_repeated: Optional[int] = 0,
             n_classes: Optional[int] = 2,
             n_clusters_per_class: Optional[int] = 1,
@@ -33,16 +33,17 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             seeds_unified: Optional[int | list[int]] = None,
             n_features: Optional[int | list[int]] = None,
             pct_random: Optional[float | list[float]] = None,
+            add_outlier: Optional[bool] = False,
             **kwargs
     ):
         super().__init__(*args, **kwargs)
         if isinstance(n_samples, int):
             n_samples = [n_samples]
         self.n_samples = n_samples
-        if isinstance(n_random, int):
+        if isinstance(n_random, int) or n_random is None:
             n_random = [n_random]
         self.n_random = n_random
-        if isinstance(n_informative, int):
+        if isinstance(n_informative, int) or n_informative is None:
             n_informative = [n_informative]
         self.n_informative = n_informative
         self.n_redundant = n_redundant
@@ -70,6 +71,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         if isinstance(pct_random, float) or pct_random is None:
             pct_random = [pct_random]
         self.pct_random = pct_random
+        self.add_outlier = add_outlier
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
@@ -91,6 +93,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument('--seeds_unified', type=int, default=self.seeds_unified, nargs='*')
         self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
         self.parser.add_argument('--pct_random', type=float, default=self.pct_random, nargs='*')
+        self.parser.add_argument('--add_outlier', action='store_true')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -112,6 +115,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.seeds_unified = args.seeds_unified
         self.n_features = args.n_features
         self.pct_random = args.pct_random
+        self.add_outlier = args.add_outlier
         return args
 
     def _get_combinations(self):
@@ -127,7 +131,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         unique_params = dict(n_redundant=self.n_redundant, n_repeated=self.n_repeated, n_classes=self.n_classes,
                              n_clusters_per_class=self.n_clusters_per_class, weights=self.weights, flip_y=self.flip_y,
                              hypercube=self.hypercube, shift=self.shift, scale=self.scale,
-                             shuffle=self.shuffle)
+                             shuffle=self.shuffle, add_outlier=self.add_outlier)
         extra_params = dict(n_jobs=self.n_jobs, return_results=False, timeout_combination=self.timeout_combination,
                             timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
@@ -166,6 +170,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         n_features = combination['n_features']
         pct_random = combination['pct_random']
         seed_unified = combination['seed_unified']
+        add_outlier = unique_params['add_outlier']
 
         if n_features is not None:
             if pct_random is not None:
@@ -179,7 +184,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
 
         dataset_name = (f'classif_{n_samples}_{n_random}_{n_informative}_{n_redundant}_{n_repeated}_{n_classes}_'
                         f'{n_clusters_per_class}_{weights}_{flip_y}_{class_sep}_{hypercube}_{shift}_{scale}_{shuffle}_'
-                        f'{seed_dataset}')
+                        f'{seed_dataset}_{add_outlier}')
         dataset_dir = self.work_root_dir / dataset_name
         X_file = dataset_dir / 'X.npy'
         y_file = dataset_dir / 'y.npy'
@@ -187,6 +192,14 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             X = np.load(X_file)
             y = np.load(y_file)
         else:
+            if add_outlier:
+                if weights:
+                    raise ValueError('Weights must be None if add_outlier is True')
+                outlier_weight = 1 / (n_samples + 1)  # one outlier class with only one sample
+                others_weights = (n_samples/n_classes) / (n_samples + 1)  # n_samples/n_classes samples per class
+                weights = [others_weights] * n_classes + [outlier_weight]
+                n_samples += 1
+                n_classes += 1
             X, y = make_classification(n_samples=n_samples,
                                        n_features=n_informative + n_redundant + n_repeated + n_random,
                                        n_informative=n_informative, n_redundant=n_redundant, n_repeated=n_repeated,
@@ -206,6 +219,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             flip_y: float = 0.0, class_sep: float = 1.0, hypercube: bool = True, shift: float = 0.0,
             scale: float = 1.0, shuffle: bool = True,
             n_features: Optional[int] = None, pct_random: Optional[float] = None, seed_unified: Optional[int] = None,
+            add_outlier: bool = False,
             n_jobs: int = 1, return_results: bool = True,
             timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
             log_to_mlflow: bool = False
@@ -236,6 +250,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             'shift': shift,
             'scale': scale,
             'shuffle': shuffle,
+            'add_outlier': add_outlier,
         }
         extra_params = {
             'n_jobs': n_jobs,
@@ -249,6 +264,26 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         else:
             return self._train_model(combination=combination, unique_params=unique_params, extra_params=extra_params,
                                      return_results=return_results)
+
+    def _evaluate_model(self, combination: dict, unique_params: Optional[dict] = None,
+                        extra_params: Optional[dict] = None, **kwargs):
+        results = super()._evaluate_model(combination=combination, unique_params=unique_params,
+                                          extra_params=extra_params, **kwargs)
+        add_outlier = unique_params['add_outlier']
+        if add_outlier:
+            y_true = kwargs['load_data_return']['y']
+            y_pred = kwargs['fit_model_return']['y_pred']
+            clusters_true, clusters_counts_true = np.unique(y_true, return_counts=True)
+            outlier_true_value = clusters_true[clusters_counts_true == 1]
+            outlier_idx = np.where(y_true == outlier_true_value)[0]
+            clusters_pred, clusters_counts_pred = np.unique(y_pred, return_counts=True)
+            outlier_pred_value = y_pred[outlier_idx][0]
+            cluster_pred_outlier = np.where(clusters_pred == outlier_pred_value)[0][0]
+            clusters_count_pred_outlier = clusters_counts_pred[cluster_pred_outlier]
+            outlier_is_alone = clusters_count_pred_outlier == 1
+            results['outlier_is_alone'] = outlier_is_alone
+            results['outlier_cluster_count'] = clusters_count_pred_outlier
+        return results
 
 
 if __name__ == '__main__':
