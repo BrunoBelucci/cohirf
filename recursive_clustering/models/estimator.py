@@ -85,7 +85,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                                        verbose=self.kmeans_verbose,
                                        random_state=repetition_random_sate, algorithm=self.kmeans_algorithm)
             # random sample of components
-            components = sample_without_replacement(n_components, min(self.components_size, n_components),
+            components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
                                                     random_state=repetition_random_sate)
             X_p = X_j[:, components]
             # if self.normalization:
@@ -167,6 +167,20 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     local_cluster_distances = cosine_distances(local_cluster)
                     local_cluster_distances_sum = local_cluster_distances.sum(axis=0)
                     closest_sample_idx = local_cluster_idx[np.argmin(local_cluster_distances_sum)]
+                    X_j_indexes_i[j] = closest_sample_idx
+                elif self.representative_method == 'closest_overall_1000':
+                    # calculate the distances between a maximum of 1000 samples in the cluster and pick the one with the
+                    # smallest sum
+                    # this puts a limit on the computational cost of O(n^2) to O(1000n)
+                    n_samples = min(1000, local_cluster.shape[0])
+                    local_cluster_random_sate = check_random_state(random_state.randint(0, 1e6) + i)
+                    local_cluster_sampled_idx = sample_without_replacement(local_cluster.shape[0], n_samples,
+                                                                           random_state=local_cluster_random_sate)
+                    local_cluster_sampled = local_cluster[local_cluster_sampled_idx, :]
+                    local_cluster_distances = cosine_distances(local_cluster_sampled)
+                    local_cluster_distances_sum = local_cluster_distances.sum(axis=0)
+                    closest_sample_idx = (
+                        local_cluster_idx)[local_cluster_sampled_idx[np.argmin(local_cluster_distances_sum)]]
                     X_j_indexes_i[j] = closest_sample_idx
                 elif self.representative_method == 'closest_to_centroid':
                     # calculate the centroid of the cluster and pick the sample closest to it
