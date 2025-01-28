@@ -3,7 +3,8 @@ from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.utils import check_random_state
 from sklearn.utils.random import sample_without_replacement
-from sklearn.metrics.pairwise import cosine_distances
+from sklearn.metrics.pairwise import (cosine_distances, rbf_kernel, laplacian_kernel, euclidean_distances,
+                                      manhattan_distances)
 from joblib import Parallel, delayed
 import optuna
 
@@ -199,6 +200,36 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # we need to change the original value in X
                     X[closest_sample_idx, :] = centroid
                     X_j_indexes_i[j] = closest_sample_idx
+                elif self.representative_method == 'rbf':
+                    # replace cosine_distance by rbf_kernel
+                    local_cluster_similarities = rbf_kernel(local_cluster)
+                    local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
+                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    X_j_indexes_i[j] = most_similar_sample_idx
+                elif self.representative_method == 'rbf_median':
+                    # replace cosine_distance by rbf_kernel with gamma = median
+                    local_cluster_distances = euclidean_distances(local_cluster)
+                    median_distance = np.median(local_cluster_distances)
+                    gamma = 1 / (2 * median_distance)
+                    local_cluster_similarities = np.exp(-gamma * local_cluster_distances)
+                    local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
+                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    X_j_indexes_i[j] = most_similar_sample_idx
+                elif self.representative_method == 'laplacian':
+                    # replace cosine_distance by laplacian_kernel
+                    local_cluster_similarities = laplacian_kernel(local_cluster)
+                    local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
+                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    X_j_indexes_i[j] = most_similar_sample_idx
+                elif self.representative_method == 'laplacian_median':
+                    # replace cosine_distance by laplacian_kernel with gamma = median
+                    local_cluster_distances = manhattan_distances(local_cluster)
+                    median_distance = np.median(local_cluster_distances)
+                    gamma = 1 / (2 * median_distance)
+                    local_cluster_similarities = np.exp(-gamma * local_cluster_distances)
+                    local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
+                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    X_j_indexes_i[j] = most_similar_sample_idx
 
                 global_cluster_idx = np.where(label_sequence_i == code)[0]
                 global_clusters_indexes_i.append(global_cluster_idx)
