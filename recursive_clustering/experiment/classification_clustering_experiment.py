@@ -273,6 +273,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         if add_outlier:
             y_true = kwargs['load_data_return']['y']
             y_pred = kwargs['fit_model_return']['y_pred']
+            # get outlier
             clusters_true, clusters_counts_true = np.unique(y_true, return_counts=True)
             outlier_true_value = clusters_true[clusters_counts_true == 1]
             outlier_idx = np.where(y_true == outlier_true_value)[0]
@@ -281,8 +282,15 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             cluster_pred_outlier = np.where(clusters_pred == outlier_pred_value)[0][0]
             clusters_count_pred_outlier = clusters_counts_pred[cluster_pred_outlier]
             outlier_is_alone = clusters_count_pred_outlier == 1
+            # check if other samples were considered outliers, that is they are alone in a cluster with count 1
+            clusters_counts_1 = np.where(clusters_counts_pred == 1)[0]
+            clusters_counts_1_but_not_outlier_cluster = np.setdiff1d(clusters_counts_1, cluster_pred_outlier)
+            number_of_false_outliers = len(clusters_counts_1_but_not_outlier_cluster)
+            has_false_outliers = number_of_false_outliers > 0
             results['outlier_is_alone'] = outlier_is_alone
             results['outlier_cluster_count'] = clusters_count_pred_outlier
+            results['has_false_outliers'] = has_false_outliers
+            results['number_of_false_outliers'] = number_of_false_outliers
         return results
 
 
