@@ -264,7 +264,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
     @staticmethod
     def create_search_space():
         search_space = dict(
-            components_size=optuna.distributions.IntDistribution(3, 30),
+            components_size=optuna.distributions.IntDistribution(2, 30),
             repetitions=optuna.distributions.IntDistribution(3, 10),
             kmeans_n_clusters=optuna.distributions.IntDistribution(2, 10),
         )
