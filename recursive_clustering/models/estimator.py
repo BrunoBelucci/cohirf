@@ -21,7 +21,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             kmeans_verbose=0,
             random_state=None,
             kmeans_algorithm='lloyd',
-            representative_method='closest_overall',
+            representative_method='closest_overall_1000',
             # MiniBatchKMeans parameters
             # kmeans_batch_size=None,
             # kmeans_max_no_improvement=10,
@@ -172,9 +172,9 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # calculate the distances between a maximum of 1000 samples in the cluster and pick the one with the
                     # smallest sum
                     # this puts a limit on the computational cost of O(n^2) to O(1000n)
-                    n_samples = min(1000, local_cluster.shape[0])
+                    n_resample = min(1000, local_cluster.shape[0])
                     local_cluster_random_sate = check_random_state(random_state.randint(0, 1e6) + i)
-                    local_cluster_sampled_idx = sample_without_replacement(local_cluster.shape[0], n_samples,
+                    local_cluster_sampled_idx = sample_without_replacement(local_cluster.shape[0], n_resample,
                                                                            random_state=local_cluster_random_sate)
                     local_cluster_sampled = local_cluster[local_cluster_sampled_idx, :]
                     local_cluster_distances = cosine_distances(local_cluster_sampled)
