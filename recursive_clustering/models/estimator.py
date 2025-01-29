@@ -22,7 +22,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             kmeans_verbose=0,
             random_state=None,
             kmeans_algorithm='lloyd',
-            representative_method='closest_overall_1000',
+            representative_method='closest_overall',
             # MiniBatchKMeans parameters
             # kmeans_batch_size=None,
             # kmeans_max_no_improvement=10,
