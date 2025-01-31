@@ -12,8 +12,8 @@ To install the requirements, run the following command:
 conda env create -f environment.yml
 ```
 
-We have also a supplementary dependency on an internal library `ml_experiments`. To install it go to its directory and 
-run:
+We have also a supplementary dependency on an internal library `ml_experiments`. To install, download it from
+https://github.com/BrunoBelucci/ml_experiments, go to its directory and run:
 
 ```bash
 pip install -e .
