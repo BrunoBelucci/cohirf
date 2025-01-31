@@ -1,0 +1,1 @@
+python cohirf/experiment/hpo_open_ml_clustering_experiment.py --experiment_name real_perf --n_jobs 4 --models_nickname CoHiRF HDBSCAN --dask_cluster_type local --n_cores 4 --n_workers 1 --dask_memory 120Gb --timeout_hpo 7200 --sampler tpe --pruner none --n_trials 100 --direction maximize --hpo_metric silhouette --datasets_ids 61 --hpo_metric adjusted_rand --standardize

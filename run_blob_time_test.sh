@@ -1,0 +1,1 @@
+python cohirf/experiment/blob_clustering_experiment.py --experiment_name blob_time --n_jobs 4 --models_nickname CoHiRF HDBSCAN --seeds_models 0 1 --seeds_dataset 0 --n_samples 100 --n_features 100 --dask_cluster_type local --n_cores 4 --n_workers 1 --dask_memory 120Gb --timeout_fit 36000

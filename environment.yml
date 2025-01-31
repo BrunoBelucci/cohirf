@@ -1,0 +1,31 @@
+name: cohirf
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - matplotlib
+  - numpy
+  - pandas
+  - scikit-learn
+  - scipy
+  - ipykernel
+  - ipywidgets
+  - seaborn
+  - optuna
+  - pip
+  - scikit-posthocs
+  - plotly
+  - mlflow
+  - postgresql
+  - psycopg2
+  - pytest
+  - dask
+  - distributed
+  - dask-jobqueue
+  - tqdm
+  - python-graphviz
+  - pip:
+      - -e .
+      - openml
+      - optuna-integration
+      - func-timeout

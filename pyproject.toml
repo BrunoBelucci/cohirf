@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cohirf"
+version = "0.3"
+description = """cohirf"""
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = "MIT"
+authors = [
+  { name = "Anonymous Author"},
+]
+maintainers = [
+  { name = "Anonymous Author"},
+]
+keywords = [
+    "clustering",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    "seaborn",
+    "openml",
+    "ipykernel",
+    "ipywidgets",
+    "optuna"
+]
