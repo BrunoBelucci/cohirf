@@ -91,6 +91,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         if hasattr(model, 'n_jobs'):
             n_jobs = model_params.get('n_jobs', n_jobs)
             model.set_params(n_jobs=n_jobs)
+        if hasattr(model, 'random_state'):
+            model.set_params(random_state=seed_model)
         return {
             'model': model,
         }
