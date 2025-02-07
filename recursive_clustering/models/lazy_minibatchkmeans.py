@@ -172,8 +172,8 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
         if isinstance(X, da.Array):
             # we do this to persist X_temp and to be able to shuffle it
             rmtree(self.tmp_dir / "X_temp.zarr", ignore_errors=True)
-            zar_file = zr.open_array(self.tmp_dir / "X_temp.zarr", mode='w', shape=X.shape, chunks=X.chunks, dtype=X.dtype)
-            X_temp = X.store(zar_file, return_stored=True)
+            zar_array = zr.open_array(self.tmp_dir / "X_temp.zarr", mode='w', shape=X.shape, chunks=X.chunks, dtype=X.dtype)
+            X_temp = X.store(zar_array, return_stored=True)
             sample_weight_shuffled = sample_weight
 
         shuffle_every_n_iterations = self.shuffle_every_n_epochs * (n_samples // self._batch_size)
@@ -190,7 +190,7 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
                         shuffled_index = random_state.permutation(n_samples)
                         sample_weight_shuffled = sample_weight_shuffled[shuffled_index]
                         X_temp = shuffle_slice(X_temp, shuffled_index)
-                        X_temp = X_temp.store(zar_file, return_stored=True)
+                        X_temp = X_temp.store(zar_array, return_stored=True)
                     block_index = random_state.randint(0, X_temp.numblocks[0])
                     start_index = block_index * self._batch_size
                     stop_index = min((block_index + 1) * self._batch_size, n_samples)
@@ -230,7 +230,7 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
                     break
 
             if isinstance(X, da.Array):
-                zar_file.close()
+                del zar_array
                 rmtree(self.tmp_dir / "X_temp.zarr", ignore_errors=True)
 
         self.cluster_centers_ = centers
