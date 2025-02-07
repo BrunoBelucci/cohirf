@@ -38,7 +38,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # dask and minibatch kmeans parameters
             use_dask='auto',
             batch_size=1024,
-            scalable_kmeans='minibatch',
+            scalable_strategy='minibatch',
             mkmeans_max_no_improvement=10,
             mkmeans_init_size=None,
             mkmeans_reassignment_ratio=0.01,
@@ -63,7 +63,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.n_jobs = n_jobs
         self.use_dask = use_dask
         self.batch_size = batch_size
-        self.scalable_kmeans = scalable_kmeans
+        self.scalable_strategy = scalable_strategy
         self.mkmeans_max_no_improvement = mkmeans_max_no_improvement
         self.mkmeans_init_size = mkmeans_init_size
         self.mkmeans_reassignment_ratio = mkmeans_reassignment_ratio
@@ -80,6 +80,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.labels_sequence_ = None
 
     def fit(self, X, y=None, sample_weight=None):
+        if self.kmeans_verbose:
+            print('Starting fit')
         n_samples = X.shape[0]
         n_components = X.shape[1]
         random_state = check_random_state(self.random_state)
@@ -110,8 +112,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             repetition_random_seed = random_state.randint(0, 1e6) + r
             n_j_samples = X_j.shape[0]
             kmeans_n_clusters = min(self.kmeans_n_clusters, n_j_samples)
-            if use_dask:
-                if self.scalable_kmeans == 'dask':
+            if use_dask and self.scalable_strategy != 'sampling':
+                if self.scalable_strategy == 'dask':
                     if self.kmeans_init == 'auto':
                         init = self.dask_kmeans_init
                     else:
@@ -121,10 +123,10 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     else:
                         max_iter = self.kmeans_max_iter
                     kmeans_estimator = KMeansDask(n_clusters=kmeans_n_clusters, init=init, n_init=self.kmeans_n_init,
-                                                   max_iter=max_iter, tol=self.kmeans_tol,
-                                                   oversampling_factor=self.dkmeans_oversampling_factor,
-                                                   random_state=repetition_random_seed)
-                elif self.scalable_kmeans == 'minibatch':
+                                                  max_iter=max_iter, tol=self.kmeans_tol,
+                                                  oversampling_factor=self.dkmeans_oversampling_factor,
+                                                  random_state=repetition_random_seed)
+                elif self.scalable_strategy == 'minibatch':
                     if self.kmeans_init == 'auto':
                         init = self.default_kmeans_init
                     else:
@@ -143,7 +145,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                                                            shuffle_every_n_epochs=self.mkmeans_shuffle_every_n_epochs,
                                                            tmp_dir=self.mkmeans_tmp_dir)
                 else:
-                    raise ValueError('scalable_kmeans must be "dask" or "minibatch"')
+                    raise ValueError('scalable_strategy must be "dask", "minibatch" or "sampling"')
             else:
                 if self.kmeans_init == 'auto':
                     init = 'k-means++'
@@ -154,15 +156,17 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 else:
                     max_iter = self.kmeans_max_iter
                 kmeans_estimator = KMeansSklearn(n_clusters=kmeans_n_clusters, init=init,
-                                                  n_init=self.kmeans_n_init,
-                                                  max_iter=max_iter, tol=self.kmeans_tol,
-                                                  verbose=self.kmeans_verbose,
-                                                  random_state=repetition_random_seed, algorithm=self.kmeans_algorithm)
+                                                 n_init=self.kmeans_n_init,
+                                                 max_iter=max_iter, tol=self.kmeans_tol,
+                                                 verbose=self.kmeans_verbose,
+                                                 random_state=repetition_random_seed, algorithm=self.kmeans_algorithm)
             # random sample of components
             components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
                                                     random_state=repetition_random_seed)
             X_p = X_j[:, components]
-            if use_dask and self.scalable_kmeans == 'dask':
+            if self.kmeans_verbose:
+                print('Fitting kmeans')
+            if use_dask and self.scalable_strategy == 'dask':
                 kmeans_estimator.fit(X_p)
                 labels_r = kmeans_estimator.labels_
             else:
@@ -174,45 +178,74 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         i = 0
         # initialize with different length of codes and uniques to enter the while loop
         codes = [0, 1]
-        unique_labels = [0]
+        n_clusters_iter = n_samples
         X_j_indexes_i_last = None
         # iterate until every sequence of labels is unique
-        while len(codes) != len(unique_labels):
+        while len(codes) != n_clusters_iter:
+            if self.kmeans_verbose:
+                print('Iteration', i)
+
+            if use_dask and self.scalable_strategy == 'sampling':
+                n_resample = min(self.batch_size, X_j.shape[0])
+                X_j_sampled_indexes = random_state.permutation(X_j.shape[0])[:n_resample]
+                X_j_not_sampled_indexes = np.setdiff1d(np.arange(X_j.shape[0]), X_j_sampled_indexes)
+                X_j_sampled_not_sampled_indexes = np.concatenate((X_j_sampled_indexes, X_j_not_sampled_indexes))
+                X_j_sampled = X_j[X_j_sampled_indexes, :].persist()
+                sampled_X_j = True
+            else:
+                X_j_sampled = X_j
+                X_j_sampled_not_sampled_indexes = np.arange(X_j.shape[0])
+                sampled_X_j = False
 
             # run the repetitions in parallel
             # obs.: For most cases, the overhead of parallelization is not worth it as internally KMeans is already
             # parallelizing with threads, but it may be useful for very large datasets.
             if not use_dask:
-                labels_i = Parallel(n_jobs=self.n_jobs)(
-                    delayed(run_one_repetition)(X_j, r, use_dask) for r in range(self.repetitions))
-                labels_i = np.array(labels_i).T
+                labels_i_sampled = Parallel(n_jobs=self.n_jobs)(
+                    delayed(run_one_repetition)(X_j_sampled, r, use_dask) for r in range(self.repetitions))
+                labels_i_sampled = np.array(labels_i_sampled).T
             else:
                 # if we are using dask probably we cannot run this in parallel as we do not have enough memory
                 # unless we are using a distributed cluster which we are not assuming here
-                labels_i = []
+                labels_i_sampled = []
                 for r in range(self.repetitions):
-                    labels_i.append(run_one_repetition(X_j, r, use_dask))
-                if self.scalable_kmeans == 'dask':
-                    labels_i = da.stack(labels_i, axis=1).compute()  # convert to numpy array
-                elif self.scalable_kmeans == 'minibatch':
-                    labels_i = np.array(labels_i).T
+                    labels_i_sampled.append(run_one_repetition(X_j_sampled, r, use_dask))
+                if self.scalable_strategy == 'dask':
+                    labels_i_sampled = da.stack(labels_i_sampled, axis=1).compute()  # convert to numpy array
+                elif self.scalable_strategy == 'minibatch' or self.scalable_strategy == 'sampling':
+                    labels_i_sampled = np.array(labels_i_sampled).T
 
             # factorize labels using numpy
-            unique_labels, codes = np.unique(labels_i, axis=0, return_inverse=True)
+            unique_labels_sampled, codes_sampled = np.unique(labels_i_sampled, axis=0, return_inverse=True)
+
+            n_clusters_iter = len(unique_labels_sampled)
+            if self.kmeans_verbose:
+                print('Number of clusters (before unsampled):', n_clusters_iter)
+            if sampled_X_j:
+                # each unsampled sample is considered a cluster
+                codes_unsampled = np.arange(n_clusters_iter, n_clusters_iter + len(X_j_not_sampled_indexes))
+                n_clusters_iter += len(X_j_not_sampled_indexes)
+                codes = np.concatenate((codes_sampled, codes_unsampled))
+                if self.kmeans_verbose:
+                    print('Number of clusters (after unsampled):', n_clusters_iter)
+            else:
+                codes = codes_sampled
 
             # store for development/experimentation purposes
-            self.n_clusters_iter_.append(len(unique_labels))
+            self.n_clusters_iter_.append(n_clusters_iter)
 
             # add to the sequence of labels
             if i == 0:
-                # every sample is present in the first iteration
-                label_sequence_i = codes
-                self.labels_sequence_ = np.concatenate((self.labels_sequence_, label_sequence_i[:, None]), axis=1)
+                # we put the codes in the correct indexes
+                label_sequence_i = np.empty((n_samples, 1), dtype=int)
+                label_sequence_i[X_j_sampled_not_sampled_indexes] = codes[:, None]
+                self.labels_sequence_ = np.concatenate((self.labels_sequence_, label_sequence_i), axis=1)
             else:
                 # only some samples are present in the following iterations
                 # so we need to add the same label as the representative sample to the rest of the samples
                 label_sequence_i = np.empty((n_samples, 1), dtype=int)
-                for j, cluster_idxs in enumerate(global_clusters_indexes_i):
+                global_clusters_indexes_i_sampled_not_sampled = [global_clusters_indexes_i[j] for j in X_j_sampled_not_sampled_indexes]
+                for j, cluster_idxs in enumerate(global_clusters_indexes_i_sampled_not_sampled):
                     cluster_label = codes[j]
                     label_sequence_i[cluster_idxs] = cluster_label
                 self.labels_sequence_ = np.concatenate((self.labels_sequence_, label_sequence_i), axis=1)
@@ -230,33 +263,37 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
 
             # X_j_indexes_i[i] will contain the index of the sample that is the closest to every other sample
             # in the i-th cluster, in other words, the representative sample of the i-th cluster
-            X_j_indexes_i = np.empty(len(unique_labels), dtype=int)
+            X_j_indexes_i = np.empty(n_clusters_iter, dtype=int)
             # global_clusters_indexes_i[i] will contain the indexes of ALL the samples in the i-th cluster
             global_clusters_indexes_i = []
             # we need the loop because the number of elements of each cluster is not the same
             # so it is difficult to vectorize
-            for j, code in enumerate(np.unique(codes)):
-                local_cluster_idx = np.where(codes == code)[0]
-                # we need to transform the indexes to the original indexes
+            unique_codes = np.unique(codes_sampled)
+            for j, code in enumerate(unique_codes):
+                if self.kmeans_verbose:
+                    print('Choosing representative sample for cluster', j)
+                local_cluster_idx = np.where(codes_sampled == code)[0]
+                local_cluster = X_j_sampled[local_cluster_idx, :]
+                # then we get the original cluster indexes
+                # we first need to correct the local_cluster_idx to the indexes of the sampled array
+                local_cluster_original_idx = X_j_sampled_not_sampled_indexes[local_cluster_idx]
+                # then we need to transform the indexes to the original indexes
                 if X_j_indexes_i_last is not None:
-                    local_cluster_idx = X_j_indexes_i_last[local_cluster_idx]
-                local_cluster = X[local_cluster_idx, :]
+                    local_cluster_original_idx = X_j_indexes_i_last[local_cluster_original_idx]
 
                 if self.representative_method == 'closest_overall':
                     # calculate the distances between all samples in the cluster and pick the one with the smallest sum
                     # this is the most computationally expensive method (O(n^2))
                     local_cluster_similarities = local_cluster @ local_cluster.T
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
                     X_j_indexes_i[j] = most_similar_sample_idx
                 elif self.representative_method == 'closest_overall_1000':
                     # calculate the distances between a maximum of 1000 samples in the cluster and pick the one with the
                     # smallest sum
                     # this puts a limit on the computational cost of O(n^2) to O(1000^2)
                     n_resample = min(1000, local_cluster.shape[0])
-                    local_cluster_random_sate = check_random_state(random_state.randint(0, 1e6) + i)
-                    local_cluster_sampled_idx = sample_without_replacement(local_cluster.shape[0], n_resample,
-                                                                           random_state=local_cluster_random_sate)
+                    local_cluster_sampled_idx = random_state.permutation(local_cluster.shape[0])[:n_resample]
                     local_cluster_sampled = local_cluster[local_cluster_sampled_idx, :]
                     local_cluster_similarities = local_cluster_sampled @ local_cluster.T
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
@@ -268,7 +305,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # this is the second most computationally expensive method (O(n))
                     centroid = local_cluster.mean(axis=0)
                     local_cluster_similarities = local_cluster @ centroid
-                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities)]
+                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities)]
                     X_j_indexes_i[j] = most_similar_sample_idx
                 elif self.representative_method == 'centroid':
                     if use_dask:
@@ -278,7 +315,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     centroid = local_cluster.mean(axis=0)
                     # we arbitrarily pick the first sample as the representative of the cluster and change its
                     # values to the centroid values so we can use the same logic as the other methods
-                    closest_sample_idx = local_cluster_idx[0]
+                    closest_sample_idx = local_cluster_original_idx[0]
                     # we need to change the original value in X
                     X[closest_sample_idx, :] = centroid
                     X_j_indexes_i[j] = closest_sample_idx
@@ -288,7 +325,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # replace cosine_distance by rbf_kernel
                     local_cluster_similarities = rbf_kernel(local_cluster)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
                     X_j_indexes_i[j] = most_similar_sample_idx
                 elif self.representative_method == 'rbf_median':
                     if use_dask:
@@ -299,7 +336,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     gamma = 1 / (2 * median_distance)
                     local_cluster_similarities = np.exp(-gamma * local_cluster_distances)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
                     X_j_indexes_i[j] = most_similar_sample_idx
                 elif self.representative_method == 'laplacian':
                     if use_dask:
@@ -307,7 +344,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # replace cosine_distance by laplacian_kernel
                     local_cluster_similarities = laplacian_kernel(local_cluster)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
                     X_j_indexes_i[j] = most_similar_sample_idx
                 elif self.representative_method == 'laplacian_median':
                     if use_dask:
@@ -318,11 +355,18 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     gamma = 1 / (2 * median_distance)
                     local_cluster_similarities = np.exp(-gamma * local_cluster_distances)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_idx[np.argmax(local_cluster_similarities_sum)]
+                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
                     X_j_indexes_i[j] = most_similar_sample_idx
 
                 global_cluster_idx = np.where(label_sequence_i == code)[0]
                 global_clusters_indexes_i.append(global_cluster_idx)
+
+            if sampled_X_j:
+                all_unsampled_clusters_original_idx = X_j_not_sampled_indexes
+                if X_j_indexes_i_last is not None:
+                    all_unsampled_clusters_original_idx = X_j_indexes_i_last[all_unsampled_clusters_original_idx]
+                X_j_indexes_i[len(unique_codes):] = all_unsampled_clusters_original_idx
+                global_clusters_indexes_i += [idx for idx in all_unsampled_clusters_original_idx]
 
             # sort the indexes to make the comparison easier between change in the same algorithm
             # maybe we will eliminate this at the end for speed
@@ -331,12 +375,15 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             global_clusters_indexes_i = [global_clusters_indexes_i[i] for i in sorted_indexes]
             X_j_indexes_i_last = X_j_indexes_i.copy()
             X_j = X[X_j_indexes_i, :]
-            if isinstance(X, da.Array) and X_j.nbytes < self.dask_memory_threshold:
+            if isinstance(X_j, da.Array) and X_j.nbytes < self.dask_memory_threshold:
+                if self.kmeans_verbose:
+                    print('Memory threshold reached, converting to numpy')
                 X_j = X_j.compute()
                 use_dask = False
             i += 1
+            del X_j_sampled
 
-        self.n_clusters_ = len(unique_labels)
+        self.n_clusters_ = n_clusters_iter
         self.labels_ = self.labels_sequence_[:, -1]
         self.cluster_representatives_ = X_j
         self.cluster_representatives_labels_ = np.unique(codes)
