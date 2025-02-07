@@ -11,28 +11,42 @@ from dask_ml.cluster import KMeans as KMeansDask
 from joblib import Parallel, delayed
 import optuna
 import pandas as pd
+from recursive_clustering.models.lazy_minibatchkmeans import LazyMiniBatchKMeans
+from pathlib import Path
 
 
 class RecursiveClustering(ClusterMixin, BaseEstimator):
+    default_kmeans_max_iter = 300
+    minibatch_kmeans_max_iter = 100
+    default_kmeans_init = 'k-means++'
+    dask_kmeans_init = 'k-means||'
+
     def __init__(
             self,
             components_size=10,
             repetitions=10,
             kmeans_n_clusters=3,
-            # kmeans_init='k-means++',
             kmeans_init='auto',
             kmeans_n_init='auto',
-            kmeans_max_iter=300,
+            kmeans_max_iter='auto',
             kmeans_tol=1e-4,
             kmeans_verbose=0,
             random_state=None,
             kmeans_algorithm='lloyd',
             representative_method='closest_overall',
             n_jobs=1,
+            # dask and minibatch kmeans parameters
             use_dask='auto',
-            dask_chunk_size='auto',
-            # if we have a X_j array with a memory less than this threshold (in bytes),
-            # we will use numpy instead of dask, default is 1GB
+            batch_size=1024,
+            scalable_kmeans='minibatch',
+            mkmeans_max_no_improvement=10,
+            mkmeans_init_size=None,
+            mkmeans_reassignment_ratio=0.01,
+            mkmeans_shuffle_every_n_epochs=10,
+            mkmeans_tmp_dir=Path.cwd(),
+            dkmeans_oversampling_factor=2,
+            # if we have an X_j array with a memory less than this threshold (in bytes),
+            # we will use numpy instead of dask, and KMeans instead of MiniBatchKMeans default is 1GB
             dask_memory_threshold=1e9,
     ):
         self.components_size = components_size
@@ -48,7 +62,14 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.representative_method = representative_method
         self.n_jobs = n_jobs
         self.use_dask = use_dask
-        self.dask_chunk_size = dask_chunk_size
+        self.batch_size = batch_size
+        self.scalable_kmeans = scalable_kmeans
+        self.mkmeans_max_no_improvement = mkmeans_max_no_improvement
+        self.mkmeans_init_size = mkmeans_init_size
+        self.mkmeans_reassignment_ratio = mkmeans_reassignment_ratio
+        self.mkmeans_shuffle_every_n_epochs = mkmeans_shuffle_every_n_epochs
+        self.mkmeans_tmp_dir = mkmeans_tmp_dir
+        self.dkmeans_oversampling_factor = dkmeans_oversampling_factor
         self.dask_memory_threshold = dask_memory_threshold
         self.n_clusters_ = None
         self.labels_ = None
@@ -77,7 +98,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 use_dask = False
         elif self.use_dask:
             if not isinstance(X, da.Array):
-                X = da.from_array(X, chunks=self.dask_chunk_size)
+                X = da.from_array(X, chunks=(self.batch_size, -1))
             use_dask = True
         else:
             use_dask = False
@@ -90,32 +111,62 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             n_j_samples = X_j.shape[0]
             kmeans_n_clusters = min(self.kmeans_n_clusters, n_j_samples)
             if use_dask:
-                if self.kmeans_init == 'auto':
-                    init = 'k-means||'
+                if self.scalable_kmeans == 'dask':
+                    if self.kmeans_init == 'auto':
+                        init = self.dask_kmeans_init
+                    else:
+                        init = self.kmeans_init
+                    if self.kmeans_max_iter == 'auto':
+                        max_iter = self.default_kmeans_max_iter
+                    else:
+                        max_iter = self.kmeans_max_iter
+                    kmeans_estimator = KMeansDask(n_clusters=kmeans_n_clusters, init=init, n_init=self.kmeans_n_init,
+                                                   max_iter=max_iter, tol=self.kmeans_tol,
+                                                   oversampling_factor=self.dkmeans_oversampling_factor,
+                                                   random_state=repetition_random_seed)
+                elif self.scalable_kmeans == 'minibatch':
+                    if self.kmeans_init == 'auto':
+                        init = self.default_kmeans_init
+                    else:
+                        init = self.kmeans_init
+                    if self.kmeans_max_iter == 'auto':
+                        max_iter = self.minibatch_kmeans_max_iter
+                    else:
+                        max_iter = self.kmeans_max_iter
+                    kmeans_estimator = LazyMiniBatchKMeans(n_clusters=kmeans_n_clusters, init=init, max_iter=max_iter,
+                                                           batch_size=self.batch_size, verbose=self.kmeans_verbose,
+                                                           compute_labels=True, random_state=repetition_random_seed,
+                                                           tol=self.kmeans_tol,
+                                                           max_no_improvement=self.mkmeans_max_no_improvement,
+                                                           init_size=self.mkmeans_init_size, n_init=self.kmeans_n_init,
+                                                           reassignment_ratio=self.mkmeans_reassignment_ratio,
+                                                           shuffle_every_n_epochs=self.mkmeans_shuffle_every_n_epochs,
+                                                           tmp_dir=self.mkmeans_tmp_dir)
                 else:
-                    init = self.kmeans_init
-                k_means_estimator = KMeansDask(n_clusters=kmeans_n_clusters, init=init, n_init=self.kmeans_n_init,
-                                               max_iter=self.kmeans_max_iter, tol=self.kmeans_tol,
-                                               random_state=repetition_random_seed)
+                    raise ValueError('scalable_kmeans must be "dask" or "minibatch"')
             else:
                 if self.kmeans_init == 'auto':
                     init = 'k-means++'
                 else:
                     init = self.kmeans_init
-                k_means_estimator = KMeansSklearn(n_clusters=kmeans_n_clusters, init=init,
+                if self.kmeans_max_iter == 'auto':
+                    max_iter = self.default_kmeans_max_iter
+                else:
+                    max_iter = self.kmeans_max_iter
+                kmeans_estimator = KMeansSklearn(n_clusters=kmeans_n_clusters, init=init,
                                                   n_init=self.kmeans_n_init,
-                                                  max_iter=self.kmeans_max_iter, tol=self.kmeans_tol,
+                                                  max_iter=max_iter, tol=self.kmeans_tol,
                                                   verbose=self.kmeans_verbose,
                                                   random_state=repetition_random_seed, algorithm=self.kmeans_algorithm)
             # random sample of components
             components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
                                                     random_state=repetition_random_seed)
             X_p = X_j[:, components]
-            if use_dask:
-                k_means_estimator.fit(X_p)
-                labels_r = k_means_estimator.labels_
+            if use_dask and self.scalable_kmeans == 'dask':
+                kmeans_estimator.fit(X_p)
+                labels_r = kmeans_estimator.labels_
             else:
-                labels_r = k_means_estimator.fit_predict(X_p)
+                labels_r = kmeans_estimator.fit_predict(X_p)
             return labels_r
 
         X_j = X
@@ -129,17 +180,22 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         while len(codes) != len(unique_labels):
 
             # run the repetitions in parallel
-            # obs.: For most cases, the overhead of parallelization is not worth it
+            # obs.: For most cases, the overhead of parallelization is not worth it as internally KMeans is already
+            # parallelizing with threads, but it may be useful for very large datasets.
             if not use_dask:
                 labels_i = Parallel(n_jobs=self.n_jobs)(
                     delayed(run_one_repetition)(X_j, r, use_dask) for r in range(self.repetitions))
                 labels_i = np.array(labels_i).T
             else:
+                # if we are using dask probably we cannot run this in parallel as we do not have enough memory
+                # unless we are using a distributed cluster which we are not assuming here
                 labels_i = []
                 for r in range(self.repetitions):
-                    print('running repetition', r, 'with dask')
                     labels_i.append(run_one_repetition(X_j, r, use_dask))
-                labels_i = da.stack(labels_i, axis=1).compute()  # convert to numpy array
+                if self.scalable_kmeans == 'dask':
+                    labels_i = da.stack(labels_i, axis=1).compute()  # convert to numpy array
+                elif self.scalable_kmeans == 'minibatch':
+                    labels_i = np.array(labels_i).T
 
             # factorize labels using numpy
             unique_labels, codes = np.unique(labels_i, axis=0, return_inverse=True)

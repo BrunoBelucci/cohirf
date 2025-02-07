@@ -10,11 +10,8 @@ from sklearn.cluster._kmeans import _labels_inertia_threadpool_limit, _mini_batc
 from sklearn.utils.parallel import _get_threadpool_controller
 import dask.array as da
 from pathlib import Path
-import h5py
 from dask.array.slicing import shuffle_slice
-from dask.array import shuffle
 from shutil import rmtree
-import os
 import zarr as zr
 
 
