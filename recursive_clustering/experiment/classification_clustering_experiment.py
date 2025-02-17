@@ -20,7 +20,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             n_informative: Optional[int | list[int]] = None,
             n_redundant: Optional[int] = 0,
             n_repeated: Optional[int] = 0,
-            n_classes: Optional[int] = 2,
+            n_classes: Optional[int | list[int]] = 2,
             n_clusters_per_class: Optional[int] = 1,
             weights: Optional[list] = None,
             flip_y: Optional[float] = 0.0,
@@ -48,6 +48,8 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.n_informative = n_informative
         self.n_redundant = n_redundant
         self.n_repeated = n_repeated
+        if isinstance(n_classes, int) or n_classes is None:
+            n_classes = [n_classes]
         self.n_classes = n_classes
         self.n_clusters_per_class = n_clusters_per_class
         self.weights = weights
@@ -80,7 +82,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument('--n_informative', type=int, default=self.n_informative)
         self.parser.add_argument('--n_redundant', type=int, default=self.n_redundant)
         self.parser.add_argument('--n_repeated', type=int, default=self.n_repeated)
-        self.parser.add_argument('--n_classes', type=int, default=self.n_classes)
+        self.parser.add_argument('--n_classes', type=int, default=self.n_classes, nargs='*')
         self.parser.add_argument('--n_clusters_per_class', type=int, default=self.n_clusters_per_class)
         self.parser.add_argument('--weights', type=list, default=self.weights)
         self.parser.add_argument('--flip_y', type=float, default=self.flip_y)
@@ -122,13 +124,13 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.n_samples,
                                     self.n_random, self.n_informative, self.n_features, self.pct_random,
                                     self.class_sep,
-                                    self.seeds_unified))
+                                    self.seeds_unified, self.n_classes))
         combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'n_samples', 'n_random', 'n_informative',
-                             'n_features', 'pct_random', 'class_sep', 'seed_unified']
+                             'n_features', 'pct_random', 'class_sep', 'seed_unified', 'n_classes']
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
-        unique_params = dict(n_redundant=self.n_redundant, n_repeated=self.n_repeated, n_classes=self.n_classes,
+        unique_params = dict(n_redundant=self.n_redundant, n_repeated=self.n_repeated,
                              n_clusters_per_class=self.n_clusters_per_class, weights=self.weights, flip_y=self.flip_y,
                              hypercube=self.hypercube, shift=self.shift, scale=self.scale,
                              shuffle=self.shuffle, add_outlier=self.add_outlier)
@@ -154,10 +156,10 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
                    **kwargs):
         n_samples = combination['n_samples']
         n_random = combination['n_random']
+        n_classes = combination['n_classes']
         n_informative = combination['n_informative']
         n_redundant = unique_params['n_redundant']
         n_repeated = unique_params['n_repeated']
-        n_classes = unique_params['n_classes']
         n_clusters_per_class = unique_params['n_clusters_per_class']
         weights = unique_params['weights']
         flip_y = unique_params['flip_y']
@@ -238,11 +240,11 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             'n_features': n_features,
             'pct_random': pct_random,
             'seed_unified': seed_unified,
+            'n_classes': n_classes,
         }
         unique_params = {
             'n_redundant': n_redundant,
             'n_repeated': n_repeated,
-            'n_classes': n_classes,
             'n_clusters_per_class': n_clusters_per_class,
             'weights': weights,
             'flip_y': flip_y,
