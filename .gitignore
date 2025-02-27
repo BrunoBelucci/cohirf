@@ -4,3 +4,6 @@
 *logs/
 *db/
 /results/processed_results/
+*run_scripts/
+*sbatch_errors/
+*sbatch_outputs/
