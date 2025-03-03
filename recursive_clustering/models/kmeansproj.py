@@ -26,6 +26,7 @@
 
 import numpy as np
 import optuna
+import pandas as pd
 from scipy.linalg import svd
 from sklearn.base import ClusterMixin, BaseEstimator
 from sklearn.utils import check_random_state
@@ -255,6 +256,8 @@ class KMeansProj(BaseEstimator, ClusterMixin):
         return self
 
     def fit_predict(self, X, y=None, sample_weight=None):
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
         self.fit(X, y, sample_weight)
         return self.labels_
 
