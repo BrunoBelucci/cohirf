@@ -2,6 +2,7 @@
 
 import numpy as np
 import optuna
+import pandas as pd
 from scipy.linalg import orth, svd
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.cluster import SpectralClustering
@@ -174,6 +175,8 @@ class IRFLLRR(ClusterMixin, BaseEstimator):
         return self
 
     def fit_predict(self, X, y=None, sample_weight=None):
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
         self.fit(X, y, sample_weight)
         return self.labels_
 
