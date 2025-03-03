@@ -2,6 +2,7 @@
 
 import numpy as np
 import optuna
+import pandas as pd
 import scipy.sparse.csgraph
 from sklearn.base import ClusterMixin, BaseEstimator
 
@@ -207,6 +208,8 @@ class Clique(ClusterMixin, BaseEstimator):
         self.labels_ = None
 
     def fit(self, X, y=None, sample_weight=None):
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
         clusters = run_clique(X, self.n_partitions, self.density_threshold)
         labels = np.zeros(X.shape[0], dtype=int)
         for i, cluster in enumerate(clusters):
