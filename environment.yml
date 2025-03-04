@@ -13,6 +13,7 @@ dependencies:
   - seaborn
   - optuna
   - dask-ml
+  - zarr
   - pip
   - pip:
       - openml
