@@ -37,7 +37,8 @@ dependencies = [
     "openml",
     "ipykernel",
     "ipywidgets",
-    "optuna"
+    "optuna",
+    "dask-ml"
 ]
 
 [project.urls]

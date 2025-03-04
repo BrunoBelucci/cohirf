@@ -12,6 +12,7 @@ dependencies:
   - ipywidgets
   - seaborn
   - optuna
+  - dask-ml
   - pip
   - pip:
       - openml
