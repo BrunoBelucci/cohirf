@@ -179,7 +179,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
             model = load_model_return.get('model', None)
             if model is not None:
                 n_iter_ = model.n_iter_
-                log_metrics['n_iter_'] = n_iter_
+                if n_iter_ is not None:
+                    log_metrics['n_iter_'] = n_iter_
                 n_clusters_iter_ = model.n_clusters_iter_
                 for i, n_clusters in enumerate(n_clusters_iter_):
                     mlflow.log_metrics({'n_clusters_iter_': n_clusters}, step=i, run_id=mlflow_run_id)
