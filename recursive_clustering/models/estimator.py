@@ -45,9 +45,11 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             mkmeans_shuffle_every_n_epochs=10,
             mkmeans_tmp_dir=Path.cwd(),
             dkmeans_oversampling_factor=2,
-            # if we have an X_j array with a memory less than this threshold (in bytes),
-            # we will use numpy instead of dask, and KMeans instead of MiniBatchKMeans default is 1GB
-            dask_memory_threshold=1e9,
+            # if we have an X_j array with number of samples smaller than this threshold,
+            # we will use numpy instead of dask, and KMeans instead of MiniBatchKMeans
+            # this can be useful to ensure that we do not run out of memory as with the default method, if we had only
+            # one cluster (worst case scenario), we would calculate a similarity matrix of size n_samples x n_samples
+            n_samples_threshold=10000,
     ):
         self.components_size = components_size
         self.repetitions = repetitions
@@ -70,7 +72,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.mkmeans_shuffle_every_n_epochs = mkmeans_shuffle_every_n_epochs
         self.mkmeans_tmp_dir = mkmeans_tmp_dir
         self.dkmeans_oversampling_factor = dkmeans_oversampling_factor
-        self.dask_memory_threshold = dask_memory_threshold
+        self.n_samples_threshold = n_samples_threshold
         self.n_clusters_ = None
         self.labels_ = None
         self.cluster_representatives_ = None
@@ -375,7 +377,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             global_clusters_indexes_i = [global_clusters_indexes_i[i] for i in sorted_indexes]
             X_j_indexes_i_last = X_j_indexes_i.copy()
             X_j = X[X_j_indexes_i, :]
-            if isinstance(X_j, da.Array) and X_j.nbytes < self.dask_memory_threshold:
+            if isinstance(X_j, da.Array) and X_j.shape[0] < self.n_samples_threshold:
                 if self.kmeans_verbose:
                     print('Memory threshold reached, converting to numpy')
                 X_j = X_j.compute()
