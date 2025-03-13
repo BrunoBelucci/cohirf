@@ -34,6 +34,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             random_state=None,
             kmeans_algorithm='lloyd',
             representative_method='closest_overall',
+            n_samples_representative=None,
             n_jobs=1,
             # dask and minibatch kmeans parameters
             use_dask='auto',
@@ -62,6 +63,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.random_state = random_state
         self.kmeans_algorithm = kmeans_algorithm
         self.representative_method = representative_method
+        self.n_samples_representative = n_samples_representative
         self.n_jobs = n_jobs
         self.use_dask = use_dask
         self.batch_size = batch_size
@@ -196,6 +198,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 sampled_X_j = True
             else:
                 X_j_sampled = X_j
+                X_j_sampled_indexes = np.arange(X_j.shape[0])
+                X_j_not_sampled_indexes = np.array([])
                 X_j_sampled_not_sampled_indexes = np.arange(X_j.shape[0])
                 sampled_X_j = False
 
@@ -278,88 +282,89 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 local_cluster = X_j_sampled[local_cluster_idx, :]
                 # then we get the original cluster indexes
                 # we first need to correct the local_cluster_idx to the indexes of the sampled array
-                local_cluster_original_idx = X_j_sampled_not_sampled_indexes[local_cluster_idx]
+                local_cluster_original_idx = X_j_sampled_indexes[local_cluster_idx]
                 # then we need to transform the indexes to the original indexes
                 if X_j_indexes_i_last is not None:
                     local_cluster_original_idx = X_j_indexes_i_last[local_cluster_original_idx]
 
-                if self.representative_method == 'closest_overall':
-                    # calculate the distances between all samples in the cluster and pick the one with the smallest sum
-                    # this is the most computationally expensive method (O(n^2))
-                    local_cluster_similarities = local_cluster @ local_cluster.T
-                    local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
-                    X_j_indexes_i[j] = most_similar_sample_idx
-                elif self.representative_method == 'closest_overall_1000':
-                    # calculate the distances between a maximum of 1000 samples in the cluster and pick the one with the
-                    # smallest sum
-                    # this puts a limit on the computational cost of O(n^2) to O(1000^2)
-                    n_resample = min(1000, local_cluster.shape[0])
-                    local_cluster_sampled_idx = random_state.permutation(local_cluster.shape[0])[:n_resample]
+                if self.n_samples_representative is not None:
+                    n_samples_representative = min(self.n_samples_representative, local_cluster.shape[0])
+                    local_cluster_sampled_idx = random_state.permutation(local_cluster.shape[0])[:n_samples_representative]
                     local_cluster_sampled = local_cluster[local_cluster_sampled_idx, :]
-                    local_cluster_similarities = local_cluster_sampled @ local_cluster.T
+                else:
+                    # this will allow us to generalize every representative_method with a sampled version
+                    local_cluster_sampled_idx = np.arange(local_cluster.shape[0])  # all samples
+                    local_cluster_sampled = local_cluster
+
+                if self.representative_method == 'closest_overall':
+                    # calculate the cosine similarities (without normalization) between all samples in the cluster and
+                    # pick the one with the largest sum
+                    # this is the most computationally expensive method (O(n^2))
+                    local_cluster_similarities = local_cluster_sampled @ local_cluster_sampled.T
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = (
-                        local_cluster_idx)[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
-                    X_j_indexes_i[j] = most_similar_sample_idx
+                    most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
+
                 elif self.representative_method == 'closest_to_centroid':
-                    # calculate the centroid of the cluster and pick the sample closest to it
+                    # calculate the centroid of the cluster and pick the sample most similar to it
                     # this is the second most computationally expensive method (O(n))
-                    centroid = local_cluster.mean(axis=0)
-                    local_cluster_similarities = local_cluster @ centroid
-                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities)]
-                    X_j_indexes_i[j] = most_similar_sample_idx
+                    centroid = local_cluster_sampled.mean(axis=0)
+                    local_cluster_similarities = local_cluster_sampled @ centroid
+                    most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities)]]
+
                 elif self.representative_method == 'centroid':
                     if use_dask:
                         raise ValueError('centroid method is not supported with dask')
                     # calculate the centroid of the cluster and use it as the representative sample
                     # this is the least computationally expensive method (O(1))
-                    centroid = local_cluster.mean(axis=0)
+                    centroid = local_cluster_sampled.mean(axis=0)
                     # we arbitrarily pick the first sample as the representative of the cluster and change its
                     # values to the centroid values so we can use the same logic as the other methods
-                    closest_sample_idx = local_cluster_original_idx[0]
+                    most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[0]]
                     # we need to change the original value in X
-                    X[closest_sample_idx, :] = centroid
-                    X_j_indexes_i[j] = closest_sample_idx
+                    X[most_similar_sample_idx, :] = centroid
+
                 elif self.representative_method == 'rbf':
                     if use_dask:
                         raise ValueError('rbf method is not supported with dask')
                     # replace cosine_distance by rbf_kernel
-                    local_cluster_similarities = rbf_kernel(local_cluster)
+                    local_cluster_similarities = rbf_kernel(local_cluster_sampled)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
-                    X_j_indexes_i[j] = most_similar_sample_idx
+                    most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
+
                 elif self.representative_method == 'rbf_median':
                     if use_dask:
                         raise ValueError('rbf_median method is not supported with dask')
                     # replace cosine_distance by rbf_kernel with gamma = median
-                    local_cluster_distances = euclidean_distances(local_cluster)
+                    local_cluster_distances = euclidean_distances(local_cluster_sampled)
                     median_distance = np.median(local_cluster_distances)
                     gamma = 1 / (2 * median_distance)
                     local_cluster_similarities = np.exp(-gamma * local_cluster_distances)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
-                    X_j_indexes_i[j] = most_similar_sample_idx
+                    most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
+
                 elif self.representative_method == 'laplacian':
                     if use_dask:
                         raise ValueError('laplacian method is not supported with dask')
                     # replace cosine_distance by laplacian_kernel
-                    local_cluster_similarities = laplacian_kernel(local_cluster)
+                    local_cluster_similarities = laplacian_kernel(local_cluster_sampled)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
-                    X_j_indexes_i[j] = most_similar_sample_idx
+                    most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
+
                 elif self.representative_method == 'laplacian_median':
                     if use_dask:
                         raise ValueError('laplacian_median method is not supported with dask')
                     # replace cosine_distance by laplacian_kernel with gamma = median
-                    local_cluster_distances = manhattan_distances(local_cluster)
+                    local_cluster_distances = manhattan_distances(local_cluster_sampled)
                     median_distance = np.median(local_cluster_distances)
                     gamma = 1 / (2 * median_distance)
                     local_cluster_similarities = np.exp(-gamma * local_cluster_distances)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
-                    most_similar_sample_idx = local_cluster_original_idx[np.argmax(local_cluster_similarities_sum)]
-                    X_j_indexes_i[j] = most_similar_sample_idx
+                    most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
+                else:
+                    raise ValueError('representative_method must be closest_overall, closest_to_centroid, centroid,'
+                                     ' rbf, rbf_median, laplacian or laplacian_median')
 
+                X_j_indexes_i[j] = most_similar_sample_idx
                 global_cluster_idx = np.where(label_sequence_i == code)[0]
                 global_clusters_indexes_i.append(global_cluster_idx)
 
