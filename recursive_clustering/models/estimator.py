@@ -223,6 +223,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
 
             # factorize labels using numpy
             unique_labels_sampled, codes_sampled = np.unique(labels_i_sampled, axis=0, return_inverse=True)
+            unique_codes_sampled = np.unique(codes_sampled)
 
             n_clusters_iter = len(unique_labels_sampled)
             if self.kmeans_verbose:
@@ -236,6 +237,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     print('Number of clusters (after unsampled):', n_clusters_iter)
             else:
                 codes = codes_sampled
+                codes_unsampled = np.array([])
 
             # store for development/experimentation purposes
             self.n_clusters_iter_.append(n_clusters_iter)
@@ -245,15 +247,26 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 # we put the codes in the correct indexes
                 label_sequence_i = np.empty((n_samples, 1), dtype=int)
                 label_sequence_i[X_j_sampled_not_sampled_indexes] = codes[:, None]
+                # global_clusters_indexes_i[i] will contain the indexes of ALL the samples in the i-th cluster
+                global_clusters_indexes_i = []
+                for code in unique_codes_sampled:
+                    cluster_idx = np.where(codes_sampled == code)[0]
+                    global_cluster_idx = X_j_sampled_indexes[cluster_idx]
+                    global_clusters_indexes_i.append(global_cluster_idx)
+                global_clusters_indexes_i.extend([[idx] for idx in X_j_not_sampled_indexes])
                 self.labels_sequence_ = np.concatenate((self.labels_sequence_, label_sequence_i), axis=1)
             else:
                 # only some samples are present in the following iterations
                 # so we need to add the same label as the representative sample to the rest of the samples
                 label_sequence_i = np.empty((n_samples, 1), dtype=int)
+                # first use last global_clusters_indexes_i to get the indexes of the samples in the last i-th cluster
                 global_clusters_indexes_i_sampled_not_sampled = [global_clusters_indexes_i[j] for j in X_j_sampled_not_sampled_indexes]
+                # next global_clusters_indexes_i will contain the indexes of ALL the samples in the current i-th cluster
+                global_clusters_indexes_i = [[] for _ in range(n_clusters_iter)]
                 for j, cluster_idxs in enumerate(global_clusters_indexes_i_sampled_not_sampled):
                     cluster_label = codes[j]
                     label_sequence_i[cluster_idxs] = cluster_label
+                    global_clusters_indexes_i[cluster_label].extend(cluster_idxs)
                 self.labels_sequence_ = np.concatenate((self.labels_sequence_, label_sequence_i), axis=1)
                 # we could replace it with something like
                 # label_sequence_i = np.empty((n_samples), dtype=int)
@@ -270,12 +283,9 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # X_j_indexes_i[i] will contain the index of the sample that is the closest to every other sample
             # in the i-th cluster, in other words, the representative sample of the i-th cluster
             X_j_indexes_i = np.empty(n_clusters_iter, dtype=int)
-            # global_clusters_indexes_i[i] will contain the indexes of ALL the samples in the i-th cluster
-            global_clusters_indexes_i = []
             # we need the loop because the number of elements of each cluster is not the same
             # so it is difficult to vectorize
-            unique_codes = np.unique(codes_sampled)
-            for j, code in enumerate(unique_codes):
+            for j, code in enumerate(unique_codes_sampled):
                 if self.kmeans_verbose:
                     print('Choosing representative sample for cluster', j)
                 local_cluster_idx = np.where(codes_sampled == code)[0]
@@ -365,18 +375,18 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                                      ' rbf, rbf_median, laplacian or laplacian_median')
 
                 X_j_indexes_i[j] = most_similar_sample_idx
-                global_cluster_idx = np.where(label_sequence_i == code)[0]
-                global_clusters_indexes_i.append(global_cluster_idx)
+                # global_cluster_idx = np.where(label_sequence_i == code)[0]
+                # global_clusters_indexes_i.append(global_cluster_idx)
 
             if sampled_X_j:
                 all_unsampled_clusters_original_idx = X_j_not_sampled_indexes
                 if X_j_indexes_i_last is not None:
                     all_unsampled_clusters_original_idx = X_j_indexes_i_last[all_unsampled_clusters_original_idx]
-                X_j_indexes_i[len(unique_codes):] = all_unsampled_clusters_original_idx
-                global_clusters_indexes_i += [idx for idx in all_unsampled_clusters_original_idx]
+                X_j_indexes_i[len(unique_codes_sampled):] = all_unsampled_clusters_original_idx
 
             # sort the indexes to make the comparison easier between change in the same algorithm
             # maybe we will eliminate this at the end for speed
+            # note: I think that sorting is now essential due to the use of global_clusters_indexes_i starting from i=1
             sorted_indexes = np.argsort(X_j_indexes_i)
             X_j_indexes_i = X_j_indexes_i[sorted_indexes]
             global_clusters_indexes_i = [global_clusters_indexes_i[i] for i in sorted_indexes]
@@ -384,7 +394,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             X_j = X[X_j_indexes_i, :]
             if isinstance(X_j, da.Array) and X_j.shape[0] < self.n_samples_threshold:
                 if self.kmeans_verbose:
-                    print('Memory threshold reached, converting to numpy')
+                    print('Number of samples threshold reached, converting to numpy')
                 X_j = X_j.compute()
                 use_dask = False
             i += 1
