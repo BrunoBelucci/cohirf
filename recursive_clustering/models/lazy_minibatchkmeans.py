@@ -197,6 +197,7 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
                     minibatch_indices = list(range(start_index, stop_index))
                     sample_weight_minibatch = sample_weight_shuffled[minibatch_indices]
                     X_minibatch = X_temp.blocks[block_index].compute()
+                    X_minibatch = np.ascontiguousarray(X_minibatch)
                 else:
                     minibatch_indices = random_state.randint(0, n_samples, self._batch_size)
                     X_minibatch = X[minibatch_indices]
@@ -247,6 +248,7 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
                 for row in range(0, X.shape[0], self._batch_size):
                     X_chunk = X[row:row + self._batch_size]
                     X_chunk = X_chunk.compute()
+                    X_chunk = np.ascontiguousarray(X_chunk)
                     labels_chunk, inertia_chunk = _labels_inertia_threadpool_limit(
                         X_chunk,
                         sample_weight[row:row + self._batch_size],
