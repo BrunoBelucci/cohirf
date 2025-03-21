@@ -4,7 +4,7 @@ from sklearn.base import _fit_context
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.utils import check_random_state
 from sklearn.utils._openmp_helpers import _openmp_effective_n_threads
-from sklearn.utils.validation import _check_sample_weight, _is_arraylike_not_scalar, check_array
+from sklearn.utils.validation import _check_sample_weight, _is_arraylike_not_scalar, check_array, validate_data
 from sklearn.utils.extmath import row_norms
 from sklearn.cluster._kmeans import _labels_inertia_threadpool_limit, _mini_batch_step, _kmeans_plusplus
 from sklearn.utils.parallel import _get_threadpool_controller
@@ -83,18 +83,19 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
         self : object
             Fitted estimator.
         """
-        X = self._validate_data(
-            X,
-            accept_sparse="csr",
-            dtype=[np.float64, np.float32],
-            order="C",
-            accept_large_sparse=False,
-            cast_to_ndarray=False,
-        )
 
         # we will ensure that X is chunked by batch_size row-wise
         if isinstance(X, da.Array):
             X = X.rechunk((self.batch_size, -1))
+
+        # X = validate_data(
+        #     self,
+        #     X,
+        #     accept_sparse="csr",
+        #     dtype=[np.float64, np.float32],
+        #     order="C",
+        #     accept_large_sparse=False,
+        # )
 
         self._check_params_vs_input(X)
         random_state = check_random_state(self.random_state)
@@ -137,6 +138,7 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
 
             if isinstance(X_valid, da.Array):
                 X_valid_computed = X_valid.compute()
+                X_valid_computed = np.ascontiguousarray(X_valid_computed)
             else:
                 X_valid_computed = X_valid
 
@@ -326,6 +328,8 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
             X = X[init_indices]
             if isinstance(X, da.Array):
                 X = X.compute()
+                X = np.ascontiguousarray(X)
+            # x_squared_norms = x_squared_norms[init_indices]
             n_samples = X.shape[0]
             sample_weight = sample_weight[init_indices]
 
