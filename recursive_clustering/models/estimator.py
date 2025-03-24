@@ -12,6 +12,7 @@ from joblib import Parallel, delayed
 import optuna
 import pandas as pd
 from recursive_clustering.models.lazy_minibatchkmeans import LazyMiniBatchKMeans
+from recursive_clustering.models.kernel_kmeans import KernelKMeans
 from pathlib import Path
 
 
@@ -36,6 +37,13 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             representative_method='closest_overall',
             n_samples_representative=None,
             n_jobs=1,
+            # kernel kmeans parameters
+            kernel_kmeans=False,
+            kkmeans_kernel='rbf',
+            kkmeans_gamma='median',
+            kkmeans_degree=3,
+            kkmeans_coef0=1.0,
+            kkmeans_params=None,
             # dask and minibatch kmeans parameters
             use_dask='auto',
             batch_size=1024,
@@ -65,6 +73,12 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.representative_method = representative_method
         self.n_samples_representative = n_samples_representative
         self.n_jobs = n_jobs
+        self.kernel_kmeans = kernel_kmeans
+        self.kkmeans_kernel = kkmeans_kernel
+        self.kkmeans_gamma = kkmeans_gamma
+        self.kkmeans_degree = kkmeans_degree
+        self.kkmeans_coef0 = kkmeans_coef0
+        self.kkmeans_params = kkmeans_params
         self.use_dask = use_dask
         self.batch_size = batch_size
         self.scalable_strategy = scalable_strategy
@@ -159,11 +173,24 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     max_iter = self.default_kmeans_max_iter
                 else:
                     max_iter = self.kmeans_max_iter
-                kmeans_estimator = KMeansSklearn(n_clusters=kmeans_n_clusters, init=init,
-                                                 n_init=self.kmeans_n_init,
-                                                 max_iter=max_iter, tol=self.kmeans_tol,
-                                                 verbose=self.kmeans_verbose,
-                                                 random_state=repetition_random_seed, algorithm=self.kmeans_algorithm)
+                if self.kernel_kmeans:
+                    if self.kmeans_n_init == 'auto':
+                        n_init = 10
+                    else:
+                        n_init = self.kmeans_n_init
+                    kmeans_estimator = KernelKMeans(n_clusters=self.kmeans_n_clusters, max_iter=max_iter,
+                                                    tol=self.kmeans_tol, n_init=n_init,
+                                                    kernel=self.kkmeans_kernel, gamma=self.kkmeans_gamma,
+                                                    degree=self.kkmeans_degree, coef0=self.kkmeans_coef0,
+                                                    kernel_params=self.kkmeans_params,
+                                                    random_state=repetition_random_seed, verbose=self.kmeans_verbose)
+                else:
+                    kmeans_estimator = KMeansSklearn(n_clusters=kmeans_n_clusters, init=init,
+                                                     n_init=self.kmeans_n_init,
+                                                     max_iter=max_iter, tol=self.kmeans_tol,
+                                                     verbose=self.kmeans_verbose,
+                                                     random_state=repetition_random_seed,
+                                                     algorithm=self.kmeans_algorithm)
             # random sample of components
             components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
                                                     random_state=repetition_random_seed)
@@ -322,8 +349,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities)]]
 
                 elif self.representative_method == 'centroid':
-                    if use_dask:
-                        raise ValueError('centroid method is not supported with dask')
+                    if use_dask and self.scalable_strategy != 'sampling':
+                        raise ValueError('centroid method is not supported with dask and a scalable strategy different from sampling')
                     # calculate the centroid of the cluster and use it as the representative sample
                     # this is the least computationally expensive method (O(1))
                     centroid = local_cluster_sampled.mean(axis=0)
@@ -334,16 +361,16 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     X[most_similar_sample_idx, :] = centroid
 
                 elif self.representative_method == 'rbf':
-                    if use_dask:
-                        raise ValueError('rbf method is not supported with dask')
+                    if use_dask and self.scalable_strategy != 'sampling':
+                        raise ValueError('rbf method is not supported with dask and a scalable strategy different from sampling')
                     # replace cosine_distance by rbf_kernel
                     local_cluster_similarities = rbf_kernel(local_cluster_sampled)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
                     most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
 
                 elif self.representative_method == 'rbf_median':
-                    if use_dask:
-                        raise ValueError('rbf_median method is not supported with dask')
+                    if use_dask and self.scalable_strategy != 'sampling':
+                        raise ValueError('rbf_median method is not supported with dask and a scalable strategy different from sampling')
                     # replace cosine_distance by rbf_kernel with gamma = median
                     local_cluster_distances = euclidean_distances(local_cluster_sampled)
                     median_distance = np.median(local_cluster_distances)
@@ -353,16 +380,16 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
 
                 elif self.representative_method == 'laplacian':
-                    if use_dask:
-                        raise ValueError('laplacian method is not supported with dask')
+                    if use_dask and self.scalable_strategy != 'sampling':
+                        raise ValueError('laplacian method is not supported with dask and a scalable strategy different from sampling')
                     # replace cosine_distance by laplacian_kernel
                     local_cluster_similarities = laplacian_kernel(local_cluster_sampled)
                     local_cluster_similarities_sum = local_cluster_similarities.sum(axis=0)
                     most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[np.argmax(local_cluster_similarities_sum)]]
 
                 elif self.representative_method == 'laplacian_median':
-                    if use_dask:
-                        raise ValueError('laplacian_median method is not supported with dask')
+                    if use_dask and self.scalable_strategy != 'sampling':
+                        raise ValueError('laplacian_median method is not supported with dask and a scalable strategy different from sampling')
                     # replace cosine_distance by laplacian_kernel with gamma = median
                     local_cluster_distances = manhattan_distances(local_cluster_sampled)
                     median_distance = np.median(local_cluster_distances)
