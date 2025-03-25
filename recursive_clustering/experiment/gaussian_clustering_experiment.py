@@ -14,6 +14,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             *args,
             n_samples: Optional[int | list[int]] = 100,
             n_features: Optional[int | list[int]] = 10,
+            n_random_features: Optional[int | list[int]] = 0,
             n_centers: Optional[int] = 3,
             distances: Optional[float] = 1.0,
             seeds_dataset: Optional[int | list[int]] = 0,
@@ -27,6 +28,9 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         if isinstance(n_features, int):
             n_features = [n_features]
         self.n_features = n_features
+        if isinstance(n_random_features, int):
+            n_random_features = [n_random_features]
+        self.n_random_features = n_random_features
         if isinstance(n_centers, int):
             n_centers = [n_centers]
         self.n_centers = n_centers
@@ -44,6 +48,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         super()._add_arguments_to_parser()
         self.parser.add_argument('--n_samples', type=int, default=self.n_samples, nargs='*')
         self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
+        self.parser.add_argument('--n_random_features', type=int, default=self.n_random_features, nargs='*')
         self.parser.add_argument('--n_centers', type=int, default=self.n_centers, nargs='*')
         self.parser.add_argument('--distances', type=float, default=self.distances, nargs='*')
         self.parser.add_argument('--seeds_dataset', type=int, default=self.seeds_dataset, nargs='*')
@@ -61,9 +66,10 @@ class GaussianClusteringExperiment(ClusteringExperiment):
 
     def _get_combinations(self):
         combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.seeds_unified,
-                                    self.n_samples, self.n_features, self.n_centers, self.distances))
+                                    self.n_samples, self.n_features, self.n_centers, self.distances,
+                                    self.n_random_features))
         combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'seed_unified', 'n_samples', 'n_features',
-                             'n_centers', 'distance']
+                             'n_centers', 'distance', 'n_random_features']
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
@@ -78,6 +84,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         n_features = combination['n_features']
         n_centers = combination['n_centers']
         distance = combination['distance']
+        n_random_features = combination['n_random_features']
         seed_dataset = combination['seed_dataset']
         seed_unified = combination['seed_unified']
         if seed_unified is not None:
@@ -107,6 +114,9 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             y = []
             for i, mean in enumerate(centers):
                 cluster_samples = rng.multivariate_normal(mean, cov, n_samples, method='cholesky')
+                if n_random_features > 0:
+                    random_features = rng.normal(size=(n_samples, n_random_features))
+                    cluster_samples = np.hstack([cluster_samples, random_features])
                 X.append(cluster_samples)
                 y.extend([i] * n_samples)
             X = np.vstack(X)
