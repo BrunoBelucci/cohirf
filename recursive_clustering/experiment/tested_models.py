@@ -6,6 +6,7 @@ from recursive_clustering.models.proclus import Proclus
 from recursive_clustering.models.scsrgf import SpectralSubspaceRandomization
 from recursive_clustering.models.sklearn import (KMeans, OPTICS, DBSCAN, AgglomerativeClustering, SpectralClustering,
                                                  MeanShift, AffinityPropagation, HDBSCAN)
+from recursive_clustering.models.WBMS import WBMS
 
 
 models_dict = {
@@ -26,4 +27,5 @@ models_dict = {
     'CompleteAgglomerativeClustering': (AgglomerativeClustering, dict(linkage='complete')),
     'AverageAgglomerativeClustering': (AgglomerativeClustering, dict(linkage='average')),
     'SingleAgglomerativeClustering': (AgglomerativeClustering, dict(linkage='single')),
+    WBMS.__name__: (WBMS, dict()),
 }
