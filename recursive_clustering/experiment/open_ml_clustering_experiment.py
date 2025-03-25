@@ -12,31 +12,69 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
             datasets_ids: Optional[list[int]] = None,
+            task_ids: Optional[list[int]] = None,
+            task_repeats: Optional[list[int]] = None,
+            task_folds: Optional[list[int]] = None,
+            task_samples: Optional[list[int]] = None,
             standardize: Optional[bool] = False,
             **kwargs
     ):
         super().__init__(**kwargs)
+        if isinstance(datasets_ids, int) or datasets_ids is None:
+            datasets_ids = [datasets_ids]
+        if isinstance(task_ids, int) or task_ids is None:
+            task_ids = [task_ids]
         self.datasets_ids = datasets_ids
+        self.task_ids = task_ids
+        self.task_repeats = task_repeats if task_repeats else [0]
+        self.task_folds = task_folds if task_folds else [0]
+        self.task_samples = task_samples if task_samples else [0]
         self.standardize = standardize
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
         self.parser.add_argument('--datasets_ids', type=int, nargs='*')
+        self.parser.add_argument('--task_ids', type=int, nargs='*')
+        self.parser.add_argument('--task_repeats', type=int, nargs='*')
+        self.parser.add_argument('--task_folds', type=int, nargs='*')
+        self.parser.add_argument('--task_samples', type=int, nargs='*')
         self.parser.add_argument('--standardize', action='store_true')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.datasets_ids = args.datasets_ids
+        self.task_ids = args.task_ids
+        self.task_repeats = args.task_repeats
+        self.task_folds = args.task_folds
+        self.task_samples = args.task_samples
         self.standardize = args.standardize
         return args
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
         dataset_id = combination['dataset_id']
+        task_id = combination['task_id']
+        task_repeat = combination['task_repeat']
+        task_fold = combination['task_fold']
+        task_sample = combination['task_sample']
         standardize = unique_params['standardize']
-        dataset = openml.datasets.get_dataset(dataset_id)
-        target = dataset.default_target_attribute
-        X, y, cat_ind, att_names = dataset.get_data(target=target)
+        if task_id is not None:
+            if dataset_id is not None:
+                raise ValueError('You cannot specify both dataset_id and task_id')
+            task = openml.tasks.get_task(task_id)
+            split = task.get_train_test_split_indices(task_fold, task_repeat, task_sample)
+            dataset = task.get_dataset()
+            X, y, cat_ind, att_names = dataset.get_data(target=task.target_name)
+            train_indices = split.train
+            # we will use only the training data
+            X = X.iloc[train_indices]
+            y = y.iloc[train_indices]
+        elif dataset_id is not None:
+            dataset = openml.datasets.get_dataset(dataset_id)
+            target = dataset.default_target_attribute
+            X, y, cat_ind, att_names = dataset.get_data(target=target)
+        else:
+            raise ValueError('You must specify either dataset_id or task_id')
         cat_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is True]
         cont_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is False]
         cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
@@ -92,8 +130,10 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         }
 
     def _get_combinations(self):
-        combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_ids))
-        combination_names = ['model_nickname', 'seed_model', 'dataset_id']
+        combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_ids, self.task_ids,
+                                    self.task_repeats, self.task_folds, self.task_samples))
+        combination_names = ['model_nickname', 'seed_model', 'dataset_id', 'task_id', 'task_repeat', 'task_fold',
+                             'task_sample']
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
@@ -103,7 +143,9 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         return combinations, combination_names, unique_params, extra_params
 
     def run_openml_experiment_combination(
-            self, model_nickname: str, dataset_id: int, seed_model: int = 0, model_params: Optional[dict] = None,
+            self, model_nickname: str, dataset_id: int, task_id: int, task_repeat: int = 0, task_fold: int = 0,
+            task_sample: int = 0,
+            seed_model: int = 0, model_params: Optional[dict] = None,
             fit_params: Optional[dict] = None, standardize: bool = False,
             n_jobs: int = 1, return_results: bool = True,
             log_to_mlflow: bool = False,
@@ -114,6 +156,10 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             'model_nickname': model_nickname,
             'seed_model': seed_model,
             'dataset_id': dataset_id,
+            'task_id': task_id,
+            'task_repeat': task_repeat,
+            'task_fold': task_fold,
+            'task_sample': task_sample,
             'model_params': model_params,
             'fit_params': fit_params,
         }

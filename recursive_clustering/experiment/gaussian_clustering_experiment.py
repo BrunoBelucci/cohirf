@@ -63,6 +63,8 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         args = super()._unpack_parser()
         self.n_samples = args.n_samples
         self.n_features = args.n_features
+        self.n_random_features = args.n_random_features
+        self.pct_random_features = args.pct_random_features
         self.n_centers = args.n_centers
         self.distances = args.distances
         self.seeds_dataset = args.seeds_dataset
