@@ -29,10 +29,10 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         if isinstance(n_features, int):
             n_features = [n_features]
         self.n_features = n_features
-        if isinstance(n_random_features, int):
+        if isinstance(n_random_features, int) or n_random_features is None:
             n_random_features = [n_random_features]
         self.n_random_features = n_random_features
-        if isinstance(pct_random_features, float):
+        if isinstance(pct_random_features, float) or isinstance(pct_random_features, int) or pct_random_features is None:
             pct_random_features = [pct_random_features]
         self.pct_random_features = pct_random_features
         if isinstance(n_centers, int):
