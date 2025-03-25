@@ -4,7 +4,7 @@ from sklearn.base import _fit_context
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.utils import check_random_state
 from sklearn.utils._openmp_helpers import _openmp_effective_n_threads
-from sklearn.utils.validation import _check_sample_weight, _is_arraylike_not_scalar, check_array, validate_data
+from sklearn.utils.validation import _check_sample_weight, _is_arraylike_not_scalar, check_array
 from sklearn.utils.extmath import row_norms
 from sklearn.cluster._kmeans import _labels_inertia_threadpool_limit, _mini_batch_step, _kmeans_plusplus
 from sklearn.utils.parallel import _get_threadpool_controller

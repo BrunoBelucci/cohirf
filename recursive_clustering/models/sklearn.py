@@ -16,7 +16,9 @@ def create_search_space_affinity_propagation():
 
 
 def create_search_space_mean_shift():
-    pass
+    search_space = dict(min_bin_freq=optuna.distributions.IntDistribution(1, 100))
+    default_values = dict(min_bin_freq=1)
+    return search_space, default_values
 
 
 def create_search_space_spectral_clustering():
