@@ -11,6 +11,7 @@ from recursive_clustering.models.WBMS import WBMS
 
 models_dict = {
     RecursiveClustering.__name__: (RecursiveClustering, dict()),
+    RecursiveClustering.__name__ + '_full': (RecursiveClustering, dict(components_size='full')),
     Clique.__name__: (Clique, dict()),
     IRFLLRR.__name__: (IRFLLRR, dict()),
     KMeansProj.__name__: (KMeansProj, dict()),

@@ -192,8 +192,13 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                                                      random_state=repetition_random_seed,
                                                      algorithm=self.kmeans_algorithm)
             # random sample of components
-            components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
-                                                    random_state=repetition_random_seed)
+            if isinstance(self.components_size, int):
+                components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
+                                                        random_state=repetition_random_seed)
+            elif self.components_size == 'full':
+                # full kmeans
+                components = np.arange(n_components)
+
             X_p = X_j[:, components]
             if self.kmeans_verbose:
                 print('Fitting kmeans')
