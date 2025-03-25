@@ -14,7 +14,8 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             *args,
             n_samples: Optional[int | list[int]] = 100,
             n_features: Optional[int | list[int]] = 10,
-            n_random_features: Optional[int | list[int]] = 0,
+            n_random_features: Optional[int | list[int]] = None,
+            pct_random_features: Optional[float | list[float]] = None,
             n_centers: Optional[int] = 3,
             distances: Optional[float] = 1.0,
             seeds_dataset: Optional[int | list[int]] = 0,
@@ -31,6 +32,9 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         if isinstance(n_random_features, int):
             n_random_features = [n_random_features]
         self.n_random_features = n_random_features
+        if isinstance(pct_random_features, float):
+            pct_random_features = [pct_random_features]
+        self.pct_random_features = pct_random_features
         if isinstance(n_centers, int):
             n_centers = [n_centers]
         self.n_centers = n_centers
@@ -49,6 +53,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument('--n_samples', type=int, default=self.n_samples, nargs='*')
         self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
         self.parser.add_argument('--n_random_features', type=int, default=self.n_random_features, nargs='*')
+        self.parser.add_argument('--pct_random_features', type=float, default=self.pct_random_features, nargs='*')
         self.parser.add_argument('--n_centers', type=int, default=self.n_centers, nargs='*')
         self.parser.add_argument('--distances', type=float, default=self.distances, nargs='*')
         self.parser.add_argument('--seeds_dataset', type=int, default=self.seeds_dataset, nargs='*')
@@ -67,9 +72,9 @@ class GaussianClusteringExperiment(ClusteringExperiment):
     def _get_combinations(self):
         combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.seeds_unified,
                                     self.n_samples, self.n_features, self.n_centers, self.distances,
-                                    self.n_random_features))
+                                    self.n_random_features, self.pct_random_features))
         combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'seed_unified', 'n_samples', 'n_features',
-                             'n_centers', 'distance', 'n_random_features']
+                             'n_centers', 'distance', 'n_random_features', 'pct_random_features']
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
@@ -85,11 +90,23 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         n_centers = combination['n_centers']
         distance = combination['distance']
         n_random_features = combination['n_random_features']
+        pct_random_features = combination['pct_random_features']
         seed_dataset = combination['seed_dataset']
         seed_unified = combination['seed_unified']
         if seed_unified is not None:
             seed_dataset = seed_unified
-        dataset_name = f'gaussian_{n_samples}_{n_features}_{n_centers}_{distance}_{seed_dataset}'
+        dataset_name = f'gaussian_{n_samples}_{n_features}_{n_centers}_{distance}_{seed_dataset}_{n_random_features}_{pct_random_features}'
+
+        if pct_random_features is not None:
+            if n_random_features is not None:
+                raise ValueError('You cannot specify both n_random_features and pct_random_features')
+            n_random_features = int(n_features * pct_random_features)
+            n_informative = n_features - n_random_features
+        elif n_random_features is not None:
+            n_informative = n_features - n_random_features
+        else:
+            n_informative = n_features
+            n_random_features = 0
 
         # check if dataset is already saved and load it if it is
         dataset_dir = self.work_root_dir / dataset_name
@@ -102,13 +119,13 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             rng = np.random.default_rng(seed_dataset)
             # Generate equally spaced centers using a regular simplex
             # Start with a random orthonormal basis in P dimensions
-            centers = np.random.randn(n_centers, n_features)
+            centers = np.random.randn(n_centers, n_informative)
             centers, _ = np.linalg.qr(centers.T)  # Orthonormalize columns
             centers = centers.T
             # Scale the simplex to achieve the desired pairwise distance
             centers *= distance / np.sqrt(2)
             # Covariance matrix (identity matrix for simplicity)
-            cov = np.eye(n_features)
+            cov = np.eye(n_informative)
             # Generate clusters
             X = []
             y = []
@@ -135,7 +152,8 @@ class GaussianClusteringExperiment(ClusteringExperiment):
                                             seed_unified: Optional[int] = None,
                                             model_params: Optional[dict] = None, fit_params: Optional[dict] = None,
                                             n_samples: int = 100, n_features: int = 2, n_centers: int = 3,
-                                            distance: float = 1.0,
+                                            distance: float = 1.0, n_random_features: Optional[int] = None,
+                                            pct_random_features: Optional[float] = None,
                                             n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False,
                                             timeout_combination: Optional[int] = None,
                                             timeout_fit: Optional[int] = None,
@@ -151,6 +169,8 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             'n_features': n_features,
             'n_centers': n_centers,
             'distance': distance,
+            'n_random_features': n_random_features,
+            'pct_random_features': pct_random_features,
         }
         unique_params = {
 
