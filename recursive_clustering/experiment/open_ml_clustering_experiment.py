@@ -1,4 +1,5 @@
 import argparse
+from email.policy import default
 from itertools import product
 from typing import Optional
 import mlflow
@@ -33,12 +34,12 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
-        self.parser.add_argument('--datasets_ids', type=int, nargs='*')
-        self.parser.add_argument('--task_ids', type=int, nargs='*')
-        self.parser.add_argument('--task_repeats', type=int, nargs='*')
-        self.parser.add_argument('--task_folds', type=int, nargs='*')
-        self.parser.add_argument('--task_samples', type=int, nargs='*')
-        self.parser.add_argument('--standardize', action='store_true')
+        self.parser.add_argument('--datasets_ids', type=int, nargs='*', default=self.datasets_ids)
+        self.parser.add_argument('--task_ids', type=int, nargs='*', default=self.task_ids)
+        self.parser.add_argument('--task_repeats', type=int, nargs='*', default=self.task_repeats)
+        self.parser.add_argument('--task_folds', type=int, nargs='*', default=self.task_folds)
+        self.parser.add_argument('--task_samples', type=int, nargs='*', default=self.task_samples)
+        self.parser.add_argument('--standardize', action='store_true', default=self.standardize)
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
