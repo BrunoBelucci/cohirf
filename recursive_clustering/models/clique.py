@@ -210,6 +210,7 @@ class Clique(ClusterMixin, BaseEstimator):
     def fit(self, X, y=None, sample_weight=None):
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
+        X = normalize_features(X)
         clusters = run_clique(X, self.n_partitions, self.density_threshold)
         labels = np.zeros(X.shape[0], dtype=int)
         for i, cluster in enumerate(clusters):
