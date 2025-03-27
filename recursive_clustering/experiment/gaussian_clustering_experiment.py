@@ -72,11 +72,19 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         return args
 
     def _get_combinations(self):
-        combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.seeds_unified,
-                                    self.n_samples, self.n_features, self.n_centers, self.distances,
-                                    self.n_random_features, self.pct_random_features))
         combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'seed_unified', 'n_samples', 'n_features',
                              'n_centers', 'distance', 'n_random_features', 'pct_random_features']
+        if self.combinations is None:
+            combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.seeds_unified,
+                                        self.n_samples, self.n_features, self.n_centers, self.distances,
+                                        self.n_random_features, self.pct_random_features))
+        else:
+            combinations = self.combinations
+            # ensure that combinations have at least the same length as combination_names
+            for combination in combinations:
+                if len(combination) != len(combination_names):
+                    raise ValueError(f'Combination {combination} does not have the same length as combination_names '
+                                     f'{combination_names}')
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']

@@ -121,12 +121,20 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         return args
 
     def _get_combinations(self):
-        combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.n_samples,
-                                    self.n_random, self.n_informative, self.n_features, self.pct_random,
-                                    self.class_sep,
-                                    self.seeds_unified, self.n_classes))
         combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'n_samples', 'n_random', 'n_informative',
                              'n_features', 'pct_random', 'class_sep', 'seed_unified', 'n_classes']
+        if self.combinations is None:
+            combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.n_samples,
+                                        self.n_random, self.n_informative, self.n_features, self.pct_random,
+                                        self.class_sep,
+                                        self.seeds_unified, self.n_classes))
+        else:
+            combinations = self.combinations
+            # ensure that combinations have at least the same length as combination_names
+            for combination in combinations:
+                if len(combination) != len(combination_names):
+                    raise ValueError(f'Combination {combination} does not have the same length as combination_names '
+                                     f'{combination_names}')
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']

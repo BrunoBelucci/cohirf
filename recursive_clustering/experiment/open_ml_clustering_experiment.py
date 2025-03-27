@@ -135,10 +135,18 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         }
 
     def _get_combinations(self):
-        combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_ids, self.task_ids,
-                                    self.task_repeats, self.task_folds, self.task_samples))
         combination_names = ['model_nickname', 'seed_model', 'dataset_id', 'task_id', 'task_repeat', 'task_fold',
                              'task_sample']
+        if self.combinations is None:
+            combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_ids, self.task_ids,
+                                        self.task_repeats, self.task_folds, self.task_samples))
+        else:
+            combinations = self.combinations
+            # ensure that combinations have at least the same length as combination_names
+            for combination in combinations:
+                if len(combination) != len(combination_names):
+                    raise ValueError(f'Combination {combination} does not have the same length as combination_names '
+                                     f'{combination_names}')
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
                         for combination in combinations]
         combination_names += ['model_params', 'fit_params']
