@@ -74,6 +74,10 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             dataset = openml.datasets.get_dataset(dataset_id)
             target = dataset.default_target_attribute
             X, y, cat_ind, att_names = dataset.get_data(target=target)
+            if dataset_id == 46785:
+                X = X.drop('cell_type1', axis=1)
+                att_names = att_names[:-1]
+                cat_ind = cat_ind[:-1]
         else:
             raise ValueError('You must specify either dataset_id or task_id')
         cat_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is True]
