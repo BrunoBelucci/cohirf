@@ -27,9 +27,28 @@ class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
         dataset_id = combination['dataset_id']
-        dataset = openml.datasets.get_dataset(dataset_id)
-        target = dataset.default_target_attribute
-        X, y, cat_ind, att_names = dataset.get_data(target=target)
+        task_id = combination['task_id']
+        task_repeat = combination['task_repeat']
+        task_fold = combination['task_fold']
+        task_sample = combination['task_sample']
+        standardize = unique_params['standardize']
+        if task_id is not None:
+            if dataset_id is not None:
+                raise ValueError('You cannot specify both dataset_id and task_id')
+            task = openml.tasks.get_task(task_id)
+            split = task.get_train_test_split_indices(task_fold, task_repeat, task_sample)
+            dataset = task.get_dataset()
+            X, y, cat_ind, att_names = dataset.get_data(target=task.target_name)
+            train_indices = split.train
+            # we will use only the training data
+            X = X.iloc[train_indices]
+            y = y.iloc[train_indices]
+        elif dataset_id is not None:
+            dataset = openml.datasets.get_dataset(dataset_id)
+            target = dataset.default_target_attribute
+            X, y, cat_ind, att_names = dataset.get_data(target=target)
+        else:
+            raise ValueError('You must specify either dataset_id or task_id')
         cat_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is True]
         cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
         n_classes = len(y.unique())
