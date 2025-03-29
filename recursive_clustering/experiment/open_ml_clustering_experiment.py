@@ -99,7 +99,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
             cat_features_names_more_10 = [cat_feature for cat_feature, cat_dim in zip(cat_features_names, cat_dims) if
                                           cat_dim < 10]
-            X = pd.get_dummies(X, columns=cat_features_names_more_10, drop_first=True)
+            X = pd.get_dummies(X, columns=cat_features_names_more_10, drop_first=True, dtype=float)
             cat_features_drop = [cat_feature for cat_feature in cat_features_names if
                                  cat_feature not in cat_features_names_more_10]
             X = X.drop(columns=cat_features_drop)
