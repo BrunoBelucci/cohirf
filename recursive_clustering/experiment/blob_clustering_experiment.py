@@ -35,6 +35,8 @@ class BlobClusteringExperiment(ClusteringExperiment):
         self.cluster_std = cluster_std
         self.center_box = center_box
         self.shuffle = shuffle
+        if isinstance(seeds_dataset, int):
+            seeds_dataset = [seeds_dataset]
         self.seeds_dataset = seeds_dataset
 
     def _add_arguments_to_parser(self):

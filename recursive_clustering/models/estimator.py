@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator, ClusterMixin
-from sklearn.cluster import KMeans as KMeansSklearn
+from sklearn.cluster import KMeans as KMeansSklearn, HDBSCAN
 from sklearn.utils import check_random_state
 from sklearn.utils.random import sample_without_replacement
 from sklearn.metrics.pairwise import (cosine_distances, rbf_kernel, laplacian_kernel, euclidean_distances,
@@ -13,6 +13,7 @@ import optuna
 import pandas as pd
 from recursive_clustering.models.lazy_minibatchkmeans import LazyMiniBatchKMeans
 from recursive_clustering.models.kernel_kmeans import KernelKMeans
+from recursive_clustering.models.scsrgf import SpectralSubspaceRandomization
 from pathlib import Path
 
 
@@ -26,12 +27,14 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             self,
             components_size=10,
             repetitions=10,
+            verbose=0,
+            # base model parameters
+            base_model='kmeans',
             kmeans_n_clusters=3,
             kmeans_init='auto',
             kmeans_n_init='auto',
             kmeans_max_iter='auto',
             kmeans_tol=1e-4,
-            kmeans_verbose=0,
             random_state=None,
             kmeans_algorithm='lloyd',
             representative_method='closest_overall',
@@ -44,6 +47,12 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             kkmeans_degree=3,
             kkmeans_coef0=1.0,
             kkmeans_params=None,
+            # hdbscan parameters
+            hdbscan_min_cluster_size=5,
+            # sc-srgf parameters
+            scsrgf_n_similarities=20,
+            scsrgf_sampling_ratio=0.5,
+            scsrgf_sc_n_clusters=3,
             # dask and minibatch kmeans parameters
             use_dask='auto',
             batch_size=1024,
@@ -62,12 +71,13 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
     ):
         self.components_size = components_size
         self.repetitions = repetitions
+        self.base_model = base_model
         self.kmeans_n_clusters = kmeans_n_clusters
         self.kmeans_init = kmeans_init
         self.kmeans_n_init = kmeans_n_init
         self.kmeans_max_iter = kmeans_max_iter
         self.kmeans_tol = kmeans_tol
-        self.kmeans_verbose = kmeans_verbose
+        self.verbose = verbose
         self.random_state = random_state
         self.kmeans_algorithm = kmeans_algorithm
         self.representative_method = representative_method
@@ -79,6 +89,10 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.kkmeans_degree = kkmeans_degree
         self.kkmeans_coef0 = kkmeans_coef0
         self.kkmeans_params = kkmeans_params
+        self.hdbscan_min_cluster_size = hdbscan_min_cluster_size
+        self.scsrgf_n_similarities = scsrgf_n_similarities
+        self.scsrgf_sampling_ratio = scsrgf_sampling_ratio
+        self.scsrgf_sc_n_clusters = scsrgf_sc_n_clusters
         self.use_dask = use_dask
         self.batch_size = batch_size
         self.scalable_strategy = scalable_strategy
@@ -98,7 +112,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.labels_sequence_ = None
 
     def fit(self, X, y=None, sample_weight=None):
-        if self.kmeans_verbose:
+        if self.verbose:
             print('Starting fit')
         n_samples = X.shape[0]
         n_components = X.shape[1]
@@ -130,7 +144,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             repetition_random_seed = random_state.randint(0, 1e6) + r
             n_j_samples = X_j.shape[0]
             kmeans_n_clusters = min(self.kmeans_n_clusters, n_j_samples)
-            if use_dask and self.scalable_strategy != 'sampling':
+            if use_dask and self.scalable_strategy != 'sampling' and self.base_model == 'kmeans':
                 if self.scalable_strategy == 'dask':
                     if self.kmeans_init == 'auto':
                         init = self.dask_kmeans_init
@@ -140,7 +154,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                         max_iter = self.default_kmeans_max_iter
                     else:
                         max_iter = self.kmeans_max_iter
-                    kmeans_estimator = KMeansDask(n_clusters=kmeans_n_clusters, init=init, n_init=self.kmeans_n_init,
+                    base_estimator = KMeansDask(n_clusters=kmeans_n_clusters, init=init, n_init=self.kmeans_n_init,
                                                   max_iter=max_iter, tol=self.kmeans_tol,
                                                   oversampling_factor=self.dkmeans_oversampling_factor,
                                                   random_state=repetition_random_seed)
@@ -153,8 +167,8 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                         max_iter = self.minibatch_kmeans_max_iter
                     else:
                         max_iter = self.kmeans_max_iter
-                    kmeans_estimator = LazyMiniBatchKMeans(n_clusters=kmeans_n_clusters, init=init, max_iter=max_iter,
-                                                           batch_size=self.batch_size, verbose=self.kmeans_verbose,
+                    base_estimator = LazyMiniBatchKMeans(n_clusters=kmeans_n_clusters, init=init, max_iter=max_iter,
+                                                           batch_size=self.batch_size, verbose=self.verbose,
                                                            compute_labels=True, random_state=repetition_random_seed,
                                                            tol=self.kmeans_tol,
                                                            max_no_improvement=self.mkmeans_max_no_improvement,
@@ -164,7 +178,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                                                            tmp_dir=self.mkmeans_tmp_dir)
                 else:
                     raise ValueError('scalable_strategy must be "dask", "minibatch" or "sampling"')
-            else:
+            elif self.base_model == 'kmeans':
                 if self.kmeans_init == 'auto':
                     init = 'k-means++'
                 else:
@@ -178,19 +192,28 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                         n_init = 10
                     else:
                         n_init = self.kmeans_n_init
-                    kmeans_estimator = KernelKMeans(n_clusters=self.kmeans_n_clusters, max_iter=max_iter,
+                    base_estimator = KernelKMeans(n_clusters=self.kmeans_n_clusters, max_iter=max_iter,
                                                     tol=self.kmeans_tol, n_init=n_init,
                                                     kernel=self.kkmeans_kernel, gamma=self.kkmeans_gamma,
                                                     degree=self.kkmeans_degree, coef0=self.kkmeans_coef0,
                                                     kernel_params=self.kkmeans_params,
-                                                    random_state=repetition_random_seed, verbose=self.kmeans_verbose)
+                                                    random_state=repetition_random_seed, verbose=self.verbose)
                 else:
-                    kmeans_estimator = KMeansSklearn(n_clusters=kmeans_n_clusters, init=init,
+                    base_estimator = KMeansSklearn(n_clusters=kmeans_n_clusters, init=init,
                                                      n_init=self.kmeans_n_init,
                                                      max_iter=max_iter, tol=self.kmeans_tol,
-                                                     verbose=self.kmeans_verbose,
+                                                     verbose=self.verbose,
                                                      random_state=repetition_random_seed,
                                                      algorithm=self.kmeans_algorithm)
+            elif self.base_model == 'hdbscan':
+                base_estimator = HDBSCAN(min_cluster_size=self.hdbscan_min_cluster_size)
+            elif self.base_model == 'sc-srgf':
+                base_estimator = SpectralSubspaceRandomization(n_similarities=self.scsrgf_n_similarities,
+                                                               sampling_ratio=self.scsrgf_sampling_ratio,
+                                                               sc_n_clusters=self.scsrgf_sc_n_clusters,)
+            else:
+                raise ValueError('base_model must be "kmeans", "hdbscan" or "sc-srgf"')
+
             # random sample of components
             if isinstance(self.components_size, int):
                 components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
@@ -198,15 +221,17 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             elif self.components_size == 'full':
                 # full kmeans
                 components = np.arange(n_components)
+            else:
+                raise ValueError('components_size must be an int or "full"')
 
             X_p = X_j[:, components]
-            if self.kmeans_verbose:
+            if self.verbose:
                 print('Fitting kmeans')
             if use_dask and self.scalable_strategy == 'dask':
-                kmeans_estimator.fit(X_p)
-                labels_r = kmeans_estimator.labels_
+                base_estimator.fit(X_p)
+                labels_r = base_estimator.labels_
             else:
-                labels_r = kmeans_estimator.fit_predict(X_p)
+                labels_r = base_estimator.fit_predict(X_p)
             return labels_r
 
         X_j = X
@@ -218,7 +243,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         X_j_indexes_i_last = None
         # iterate until every sequence of labels is unique
         while len(codes) != n_clusters_iter:
-            if self.kmeans_verbose:
+            if self.verbose:
                 print('Iteration', i)
 
             if use_dask and self.scalable_strategy == 'sampling':
@@ -258,14 +283,14 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             unique_codes_sampled = np.unique(codes_sampled)
 
             n_clusters_iter = len(unique_labels_sampled)
-            if self.kmeans_verbose:
+            if self.verbose:
                 print('Number of clusters (before unsampled):', n_clusters_iter)
             if sampled_X_j:
                 # each unsampled sample is considered a cluster
                 codes_unsampled = np.arange(n_clusters_iter, n_clusters_iter + len(X_j_not_sampled_indexes))
                 n_clusters_iter += len(X_j_not_sampled_indexes)
                 codes = np.concatenate((codes_sampled, codes_unsampled))
-                if self.kmeans_verbose:
+                if self.verbose:
                     print('Number of clusters (after unsampled):', n_clusters_iter)
             else:
                 codes = codes_sampled
@@ -318,7 +343,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # we need the loop because the number of elements of each cluster is not the same
             # so it is difficult to vectorize
             for j, code in enumerate(unique_codes_sampled):
-                if self.kmeans_verbose:
+                if self.verbose:
                     print('Choosing representative sample for cluster', j)
                 local_cluster_idx = np.where(codes_sampled == code)[0]
                 local_cluster = X_j_sampled[local_cluster_idx, :]
@@ -425,7 +450,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             X_j_indexes_i_last = X_j_indexes_i.copy()
             X_j = X[X_j_indexes_i, :]
             if isinstance(X_j, da.Array) and X_j.shape[0] < self.n_samples_threshold:
-                if self.kmeans_verbose:
+                if self.verbose:
                     print('Number of samples threshold reached, converting to numpy')
                 X_j = X_j.compute()
                 use_dask = False
@@ -460,5 +485,41 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             components_size=10,
             repetitions=10,
             kmeans_n_clusters=3,
+        )
+        return search_space, default_values
+
+
+class RecursiveClusteringHDBSCAN(RecursiveClustering):
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            components_size=optuna.distributions.IntDistribution(2, 30),
+            repetitions=optuna.distributions.IntDistribution(3, 10),
+            hdbscan_min_cluster_size=optuna.distributions.IntDistribution(2, 10)
+        )
+        default_values = dict(
+            min_cluster_size=5,
+            components_size=10,
+            hdbscan_min_cluster_size=10,
+        )
+        return search_space, default_values
+
+
+class RecursiveClusteringSCSRGF(RecursiveClustering):
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            components_size=optuna.distributions.IntDistribution(2, 30),
+            repetitions=optuna.distributions.IntDistribution(3, 10),
+            scsrgf_n_similarities=optuna.distributions.IntDistribution(10, 30),
+            scsrgf_sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+            scsrgf_sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
+        )
+        default_values = dict(
+            components_size=10,
+            repetitions=10,
+            scsrgf_n_similarities=20,
+            scsrgf_sampling_ratio=0.5,
+            scsrgf_sc_n_clusters=3,
         )
         return search_space, default_values
