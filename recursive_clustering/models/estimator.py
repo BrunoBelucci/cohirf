@@ -602,7 +602,7 @@ class RecursiveClusteringPct(RecursiveClustering):
     @staticmethod
     def create_search_space():
         search_space = dict(
-            components_size=optuna.distributions.FloatDistribution(0.1, 0.5),
+            components_size=optuna.distributions.FloatDistribution(0.1, 0.7),
             repetitions=optuna.distributions.IntDistribution(1, 10),
             kmeans_n_clusters=optuna.distributions.IntDistribution(2, 10),
         )
