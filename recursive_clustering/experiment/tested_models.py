@@ -18,6 +18,7 @@ models_dict = {
     RecursiveClusteringSCSRGF.__name__ + '_full': (RecursiveClusteringSCSRGF, dict(components_size='full')),
     RecursiveClusteringPct.__name__: (RecursiveClusteringPct, dict(components_size=0.3)),
     RecursiveClusteringPct.__name__ + '_full': (RecursiveClusteringPct, dict(components_size='full')),
+    RecursiveClusteringPct.__name__ + '_grp': (RecursiveClusteringPct, dict(components_size=0.3, use_grp=True)),
     Clique.__name__: (Clique, dict()),
     IRFLLRR.__name__: (IRFLLRR, dict()),
     KMeansProj.__name__: (KMeansProj, dict()),
