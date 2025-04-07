@@ -174,7 +174,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
             log_params['dataset_name'] = load_data_return['dataset_name']
 
         model_nickname = combination.get('model_nickname', None)
-        if model_nickname == 'RecursiveClustering':
+        if model_nickname.find('RecursiveClustering') != -1:
             load_model_return = kwargs.get('load_model_return', {})
             model = load_model_return.get('model', None)
             if model is not None:
