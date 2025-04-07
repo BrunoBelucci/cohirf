@@ -5,7 +5,7 @@ from sklearn.utils import check_random_state
 from sklearn.utils.random import sample_without_replacement
 from sklearn.metrics.pairwise import (cosine_distances, rbf_kernel, laplacian_kernel, euclidean_distances,
                                       manhattan_distances)
-from sklearn.random_projection import GaussianRandomProjection
+from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
 import dask.array as da
 import dask.dataframe as dd
 from dask_ml.cluster import KMeans as KMeansDask
@@ -74,6 +74,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             exploration_factor=0.5,
             # gaussian random projection
             use_grp=False,
+            use_srp=False,
     ):
         self.components_size = components_size
         self.repetitions = repetitions
@@ -112,6 +113,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.weighted_components = weighted_components
         self.exploration_factor = exploration_factor
         self.use_grp = use_grp
+        self.use_srp = use_srp
         self.n_clusters_ = None
         self.labels_ = None
         self.cluster_representatives_ = None
@@ -235,6 +237,10 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # use Gaussian random projection to reduce the number of components
                     grp = GaussianRandomProjection(n_components=self.components_size, random_state=repetition_random_seed)
                     X_p = grp.fit_transform(X_j)
+                elif self.use_srp:
+                    # use Sparse random projection to reduce the number of components
+                    srp = SparseRandomProjection(n_components=self.components_size, random_state=repetition_random_seed)
+                    X_p = srp.fit_transform(X_j)
                 else:
                     components = random_state.choice(n_components, size=min(self.components_size, n_components - 1),
                                                      p=self.features_weights_, replace=False)
@@ -248,6 +254,10 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # use Gaussian random projection to reduce the number of components
                     grp = GaussianRandomProjection(n_components=components_size, random_state=repetition_random_seed)
                     X_p = grp.fit_transform(X_j)
+                elif self.use_srp:
+                    # use Sparse random projection to reduce the number of components
+                    srp = SparseRandomProjection(n_components=components_size, random_state=repetition_random_seed)
+                    X_p = srp.fit_transform(X_j)
                 else:
                     components = random_state.choice(n_components, size=min(components_size, n_components - 1),
                                                      p=self.features_weights_, replace=False)
