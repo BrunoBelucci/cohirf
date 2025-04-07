@@ -218,6 +218,13 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             if isinstance(self.components_size, int):
                 components = sample_without_replacement(n_components, min(self.components_size, n_components - 1),
                                                         random_state=repetition_random_seed)
+            elif isinstance(self.components_size, float):
+                # sample a percentage of components
+                if self.components_size < 0 or self.components_size > 1:
+                    raise ValueError('components_size must be between 0 and 1')
+                components_size = int(self.components_size * n_components)
+                components = sample_without_replacement(n_components, min(components_size, n_components - 1),
+                                                        random_state=repetition_random_seed)
             elif self.components_size == 'full':
                 # full kmeans
                 components = np.arange(n_components)
@@ -521,5 +528,21 @@ class RecursiveClusteringSCSRGF(RecursiveClustering):
             scsrgf_n_similarities=20,
             scsrgf_sampling_ratio=0.5,
             scsrgf_sc_n_clusters=3,
+        )
+        return search_space, default_values
+
+
+class RecursiveClusteringPct(RecursiveClustering):
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            components_size=optuna.distributions.FloatDistribution(0.1, 1),
+            repetitions=optuna.distributions.IntDistribution(3, 10),
+            kmeans_n_clusters=optuna.distributions.IntDistribution(2, 10),
+        )
+        default_values = dict(
+            components_size=0.3,
+            repetitions=10,
+            kmeans_n_clusters=3,
         )
         return search_space, default_values

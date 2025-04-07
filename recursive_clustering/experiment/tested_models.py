@@ -1,4 +1,4 @@
-from recursive_clustering.models.estimator import RecursiveClustering, RecursiveClusteringHDBSCAN, RecursiveClusteringSCSRGF
+from recursive_clustering.models.estimator import RecursiveClustering, RecursiveClusteringHDBSCAN, RecursiveClusteringSCSRGF, RecursiveClusteringPct
 from recursive_clustering.models.clique import Clique
 from recursive_clustering.models.irfllrr import IRFLLRR
 from recursive_clustering.models.kmeansproj import KMeansProj
@@ -16,6 +16,8 @@ models_dict = {
     RecursiveClusteringHDBSCAN.__name__ + '_full': (RecursiveClusteringHDBSCAN, dict(components_size='full')),
     RecursiveClusteringSCSRGF.__name__: (RecursiveClusteringSCSRGF, dict()),
     RecursiveClusteringSCSRGF.__name__ + '_full': (RecursiveClusteringSCSRGF, dict(components_size='full')),
+    RecursiveClusteringPct.__name__: (RecursiveClusteringPct, dict(components_size=0.3)),
+    RecursiveClusteringPct.__name__ + '_full': (RecursiveClusteringPct, dict(components_size='full')),
     Clique.__name__: (Clique, dict()),
     IRFLLRR.__name__: (IRFLLRR, dict()),
     KMeansProj.__name__: (KMeansProj, dict()),

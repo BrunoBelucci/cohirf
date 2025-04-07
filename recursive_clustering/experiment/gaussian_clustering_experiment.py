@@ -111,7 +111,6 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         seed_unified = combination['seed_unified']
         if seed_unified is not None:
             seed_dataset = seed_unified
-        dataset_name = f'gaussian_{n_samples}_{n_features}_{n_centers}_{distance}_{seed_dataset}_{n_random_features}_{pct_random_features}'
 
         if pct_random_features is not None:
             if n_random_features is not None:
@@ -126,6 +125,8 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         else:
             n_informative_features = n_features
             n_random_features = 0
+
+        dataset_name = f'gaussian_{n_samples}_{n_informative_features}_{n_random_features}_{n_centers}_{distance}_{seed_dataset}'
 
         # check if dataset is already saved and load it if it is
         dataset_dir = self.work_root_dir / dataset_name
