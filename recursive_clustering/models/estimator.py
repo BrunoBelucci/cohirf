@@ -7,6 +7,7 @@ from sklearn.metrics.pairwise import (cosine_distances, rbf_kernel, laplacian_ke
                                       manhattan_distances)
 from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
 from sklearn.kernel_approximation import Nystroem
+from sklearn.decomposition import PCA
 import dask.array as da
 import dask.dataframe as dd
 from dask_ml.cluster import KMeans as KMeansDask
@@ -78,6 +79,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             use_srp=False,
             # nystroem
             use_nystroem=False,
+            use_pca=False,
     ):
         self.components_size = components_size
         self.repetitions = repetitions
@@ -118,6 +120,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.use_grp = use_grp
         self.use_srp = use_srp
         self.use_nystroem = use_nystroem
+        self.use_pca = use_pca
         self.n_clusters_ = None
         self.labels_ = None
         self.cluster_representatives_ = None
@@ -157,6 +160,13 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             use_dask = True
         else:
             use_dask = False
+
+        if self.use_pca:
+            if self.verbose:
+                print('Using PCA')
+            pca = PCA(n_components=self.components_size, random_state=random_state)
+            X = pca.fit_transform(X)
+            n_components = X.shape[1]
 
         # labels_sequence_ is always a numpy array (no dask)
         self.labels_sequence_ = np.empty((n_samples, 0), dtype=int)
