@@ -287,7 +287,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     X_p = srp.fit_transform(X_j)
                 elif self.use_nystroem and components_size < X_j.shape[0]:
                     # use Nystroem to reduce the number of components
-                    nystroem = Nystroem(n_components=self.components_size, random_state=repetition_random_seed, kernel='rbf', gamma=self.gamma)
+                    nystroem = Nystroem(n_components=components_size, random_state=repetition_random_seed, kernel='rbf', gamma=self.gamma)
                     X_p = nystroem.fit_transform(X_j)
                 else:
                     components = random_state.choice(n_components, size=min(components_size, n_components - 1),
