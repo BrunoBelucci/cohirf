@@ -7,7 +7,7 @@ from sklearn.metrics.pairwise import (cosine_distances, rbf_kernel, laplacian_ke
                                       manhattan_distances)
 from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
 from sklearn.kernel_approximation import Nystroem
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, KernelPCA
 import dask.array as da
 import dask.dataframe as dd
 from dask_ml.cluster import KMeans as KMeansDask
@@ -170,7 +170,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 components_size = int(self.components_size * n_components)
             else:
                 raise ValueError('components_size must be an int or a float with PCA')
-            pca = PCA(n_components=components_size, random_state=random_state)
+            pca = KernelPCA(n_components=components_size, random_state=random_state, kernel='rbf')
             X = pca.fit_transform(X)
             n_components = X.shape[1]
             self.components_size = 'full'  # we will use all features from the pca
