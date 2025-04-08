@@ -164,9 +164,16 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         if self.use_pca:
             if self.verbose:
                 print('Using PCA')
-            pca = PCA(n_components=self.components_size, random_state=random_state)
+            if isinstance(self.components_size, int):
+                components_size = self.components_size
+            elif isinstance(self.components_size, float):
+                components_size = int(self.components_size * n_components)
+            else:
+                raise ValueError('components_size must be an int or a float with PCA')
+            pca = PCA(n_components=components_size, random_state=random_state)
             X = pca.fit_transform(X)
             n_components = X.shape[1]
+            self.components_size = 'full'  # we will use all features from the pca
 
         # labels_sequence_ is always a numpy array (no dask)
         self.labels_sequence_ = np.empty((n_samples, 0), dtype=int)
