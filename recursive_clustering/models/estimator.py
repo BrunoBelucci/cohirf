@@ -80,6 +80,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
             # nystroem
             use_nystroem=False,
             use_pca=False,
+            gamma=None,
     ):
         self.components_size = components_size
         self.repetitions = repetitions
@@ -121,6 +122,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
         self.use_srp = use_srp
         self.use_nystroem = use_nystroem
         self.use_pca = use_pca
+        self.gamma = gamma
         self.n_clusters_ = None
         self.labels_ = None
         self.cluster_representatives_ = None
@@ -170,13 +172,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 components_size = int(self.components_size * n_components)
             else:
                 raise ValueError('components_size must be an int or a float with PCA')
-            n_points_dist_estimate = min(1000, n_samples)
-            index_est = sample_without_replacement(n_samples, n_points_dist_estimate, random_state=random_state)
-            X_est = X[index_est]
-            dist_estimate = euclidean_distances(X_est)
-            median_distance = np.median(dist_estimate)
-            gamma = 1 / (2 * median_distance)
-            pca = Nystroem(n_components=components_size, random_state=random_state, kernel='rbf', gamma=gamma)
+            pca = Nystroem(n_components=components_size, random_state=random_state, kernel='rbf', gamma=self.gamma)
             X = pca.fit_transform(X)
             n_components = X.shape[1]
             self.components_size = 'full'  # we will use all features from the pca
@@ -270,7 +266,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     X_p = srp.fit_transform(X_j)
                 elif self.use_nystroem and self.components_size < X_j.shape[0]:
                     # use Nystroem to reduce the number of components
-                    nystroem = Nystroem(n_components=self.components_size, random_state=repetition_random_seed)
+                    nystroem = Nystroem(n_components=self.components_size, random_state=repetition_random_seed, kernel='rbf', gamma=self.gamma)
                     X_p = nystroem.fit_transform(X_j)
                 else:
                     components = random_state.choice(n_components, size=min(self.components_size, n_components - 1),
@@ -291,7 +287,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     X_p = srp.fit_transform(X_j)
                 elif self.use_nystroem and components_size < X_j.shape[0]:
                     # use Nystroem to reduce the number of components
-                    nystroem = Nystroem(n_components=components_size, random_state=repetition_random_seed)
+                    nystroem = Nystroem(n_components=self.components_size, random_state=repetition_random_seed, kernel='rbf', gamma=self.gamma)
                     X_p = nystroem.fit_transform(X_j)
                 else:
                     components = random_state.choice(n_components, size=min(components_size, n_components - 1),
@@ -645,5 +641,23 @@ class RecursiveClusteringPct(RecursiveClustering):
             components_size=0.3,
             repetitions=10,
             kmeans_n_clusters=3,
+        )
+        return search_space, default_values
+
+
+class RecursiveClusteringNyst(RecursiveClustering):
+    @staticmethod
+    def create_search_space():
+        search_space = dict(
+            components_size=optuna.distributions.FloatDistribution(0.1, 0.7),
+            repetitions=optuna.distributions.IntDistribution(2, 10),
+            kmeans_n_clusters=optuna.distributions.IntDistribution(2, 10),
+            gamma=optuna.distributions.FloatDistribution(1e-2, 1e2, log=True),
+        )
+        default_values = dict(
+            components_size=0.3,
+            repetitions=10,
+            kmeans_n_clusters=3,
+            gamma=1.0,
         )
         return search_space, default_values
