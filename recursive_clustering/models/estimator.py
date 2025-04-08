@@ -172,7 +172,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                 components_size = int(self.components_size * n_components)
             else:
                 raise ValueError('components_size must be an int or a float with PCA')
-            pca = KernelPCA(n_components=components_size, random_state=random_state, kernel='rbf', gamma=self.gamma)
+            pca = Nystroem(n_components=components_size, random_state=random_state, kernel='rbf', gamma=self.gamma)
             X = pca.fit_transform(X)
             n_components = X.shape[1]
             self.components_size = 'full'  # we will use all features from the pca
