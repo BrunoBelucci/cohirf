@@ -245,7 +245,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # use Sparse random projection to reduce the number of components
                     srp = SparseRandomProjection(n_components=self.components_size, random_state=repetition_random_seed)
                     X_p = srp.fit_transform(X_j)
-                elif self.use_nystroem:
+                elif self.use_nystroem and self.components_size < X_j.shape[0]:
                     # use Nystroem to reduce the number of components
                     nystroem = Nystroem(n_components=self.components_size, random_state=repetition_random_seed)
                     X_p = nystroem.fit_transform(X_j)
@@ -266,7 +266,7 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
                     # use Sparse random projection to reduce the number of components
                     srp = SparseRandomProjection(n_components=components_size, random_state=repetition_random_seed)
                     X_p = srp.fit_transform(X_j)
-                elif self.use_nystroem:
+                elif self.use_nystroem and components_size < X_j.shape[0]:
                     # use Nystroem to reduce the number of components
                     nystroem = Nystroem(n_components=components_size, random_state=repetition_random_seed)
                     X_p = nystroem.fit_transform(X_j)
