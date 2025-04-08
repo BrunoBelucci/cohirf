@@ -652,12 +652,12 @@ class RecursiveClusteringNyst(RecursiveClustering):
             components_size=optuna.distributions.FloatDistribution(0.1, 0.7),
             repetitions=optuna.distributions.IntDistribution(2, 10),
             kmeans_n_clusters=optuna.distributions.IntDistribution(2, 10),
-            gamma=optuna.distributions.FloatDistribution(1e-2, 1e2, log=True),
+            gamma=optuna.distributions.FloatDistribution(0, 1),
         )
         default_values = dict(
             components_size=0.3,
             repetitions=10,
             kmeans_n_clusters=3,
-            gamma=1.0,
+            gamma=0.5,
         )
         return search_space, default_values
