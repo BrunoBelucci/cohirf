@@ -69,7 +69,7 @@ class BaseCoHiRF:
             self._random_state = np.random.default_rng(self._random_state)
         return self._random_state
 
-    def get_base_model(self):
+    def get_base_model(self, random_seed):
         raise ValueError(f'base_model {self.base_model} is not valid.')
         
     def sample_X_j(self, X_j, child_random_state):
@@ -100,7 +100,8 @@ class BaseCoHiRF:
         if self.verbose:
             print('Starting repetition', repetition)
         child_random_state = np.random.default_rng([self.random_state.integers(0, 1e6), repetition])
-        base_model = self.get_base_model()
+        random_seed = child_random_state.integers(0, 1e6)
+        base_model = self.get_base_model(random_seed)
         X_p = self.sample_X_j(X_j, child_random_state)
         labels = self.get_labels_from_base_model(base_model, X_p)
         return labels
@@ -191,15 +192,15 @@ class BaseCoHiRF:
         return cluster_similarities
 
     
-    def choose_new_representatives(self, X_representatives, representatives_indexes, representative_cluster_assignments,
-                                   clusters_labels, use_dask):
+    def choose_new_representatives(self, X_representatives, old_representatives_indexes,
+                                   new_representative_cluster_assignments, new_clusters_labels, use_dask):
         new_representatives_indexes = []
-        for label in clusters_labels:
+        for label in new_clusters_labels:
             if self.verbose:
                 print('Choosing new representative sample for cluster', label)
-            cluster_mask = representative_cluster_assignments == label
+            cluster_mask = new_representative_cluster_assignments == label
             X_cluster = X_representatives[cluster_mask]
-            X_cluster_indexes = representatives_indexes[cluster_mask]
+            X_cluster_indexes = old_representatives_indexes[cluster_mask]
             # sample a representative sample from the cluster
             if self.n_samples_representative is not None:
                 n_samples_representative = min(self.n_samples_representative, X_cluster.shape[0])
@@ -212,12 +213,12 @@ class BaseCoHiRF:
             new_representatives_indexes.append(most_similar_sample_idx)
         return np.array(new_representatives_indexes)
     
-    def get_new_clusters(self, clusters, representatives_indexes, representative_cluster_assignments, n_clusters):
-        new_clusters = [[] for _ in range(n_clusters)]
+    def get_new_clusters(self, old_clusters, new_representative_cluster_assignments, new_n_clusters):
+        new_clusters = [[] for _ in range(new_n_clusters)]
         if self.verbose:
             print('Getting new clusters')
-        for cluster, rep_idx in zip(clusters, representatives_indexes):
-            cluster_assignment = representative_cluster_assignments[rep_idx]
+        for i, cluster in enumerate(old_clusters):
+            cluster_assignment = new_representative_cluster_assignments[i]
             new_clusters[cluster_assignment].extend(cluster)
         return new_clusters
     
@@ -291,32 +292,31 @@ class BaseCoHiRF:
                 not_resampled_indexes = None
 
             # consensus assignment
-            representative_cluster_assignments = self.get_representative_cluster_assignments(X_representatives)
-            clusters_labels = np.unique(representative_cluster_assignments)
-            n_clusters = len(clusters_labels)
+            new_representative_cluster_assignments = self.get_representative_cluster_assignments(X_representatives)
+            new_clusters_labels = np.unique(new_representative_cluster_assignments)
+            new_n_clusters = len(new_clusters_labels)
 
             # using representative_method
             new_representatives_indexes = self.choose_new_representatives(
-                X_representatives, representatives_indexes, representative_cluster_assignments, clusters_labels,
+                X_representatives, representatives_indexes, new_representative_cluster_assignments, new_clusters_labels,
                 use_dask)
             
             if not_resampled_indexes is not None:
                 # we consider the not resampled samples as invididual clusters
                 # we create the labels of the clusters
-                not_sampled_labels = np.arange(n_clusters, n_clusters + len(not_resampled_indexes))
+                not_sampled_labels = np.arange(new_n_clusters, new_n_clusters + len(not_resampled_indexes))
                 # we update representative_cluster_assignments
-                representative_cluster_assignments = np.concatenate((representative_cluster_assignments, 
-                                                                     not_sampled_labels))
-                clusters_labels = np.concatenate((clusters_labels, not_sampled_labels))
+                new_representative_cluster_assignments = np.concatenate((new_representative_cluster_assignments, 
+                                                                        not_sampled_labels))
+                new_clusters_labels = np.concatenate((new_clusters_labels, not_sampled_labels))
                 # we add the not resampled_indexes to the new_representatives_indexes
                 new_representatives_indexes = np.concatenate((new_representatives_indexes, not_resampled_indexes))
                 # we update the number of clusters
-                n_clusters += len(not_resampled_indexes)
+                new_n_clusters += len(not_resampled_indexes)
             
-            self.n_clusters_iter_.append(n_clusters)
+            self.n_clusters_iter_.append(new_n_clusters)
 
-            new_clusters = self.get_new_clusters(
-                clusters, representatives_indexes, representative_cluster_assignments, n_clusters)
+            new_clusters = self.get_new_clusters(clusters, new_representative_cluster_assignments, new_n_clusters)
             
             if self.save_path:
                 labels = self.get_labels_from_clusters(new_clusters)
@@ -325,6 +325,8 @@ class BaseCoHiRF:
             # update variables
             clusters = new_clusters
             representatives_indexes = new_representatives_indexes
+            representative_cluster_assignments = new_representative_cluster_assignments
+            clusters_labels = new_clusters_labels
             X_representatives = X[representatives_indexes, :]
             if isinstance(X_representatives, da.Array) and X_representatives.shape[0] <= self.n_samples_threshold:
                 X_representatives = X_representatives.compute()
@@ -333,7 +335,6 @@ class BaseCoHiRF:
 
         self.n_clusters_ = len(clusters)
         self.labels_ = self.get_labels_from_clusters(clusters)
-        self.labels_ = np.concatenate(self.labels_)
         self.cluster_representatives_ = X_representatives
         self.cluster_representatives_labels_ = representative_cluster_assignments
         self.n_iter_ = i
@@ -375,11 +376,11 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
                          kmeans_init=kmeans_init, kmeans_n_init=kmeans_n_init, kmeans_max_iter=kmeans_max_iter,
                          kmeans_tol=kmeans_tol)
         
-    def get_base_model(self):
+    def get_base_model(self, random_seed):
         if self.base_model == 'kmeans':
             return KMeans(n_clusters=self.kmeans_n_clusters, init=self.kmeans_init,
                                  n_init=self.kmeans_n_init, max_iter=self.kmeans_max_iter, tol=self.kmeans_tol,
-                                 verbose=self.verbose, random_state=self._random_state)
+                                 verbose=self.verbose, random_state=random_seed)
         else:
             raise ValueError(f'base_model {self.base_model} is not valid.')
 
