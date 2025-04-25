@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.cluster import KMeans as KMeansSklearn, HDBSCAN
@@ -17,6 +18,247 @@ from recursive_clustering.models.scsrgf import SpectralSubspaceRandomization
 from pathlib import Path
 
 
+class BaseCohirf:
+    def __init__(
+            self,
+            n_features: int | float | str = 10,
+            repetitions: int = 10,
+            verbose: int | bool = 0,
+            base_model: str | type[BaseEstimator] = 'kmeans',
+            representative_method: str = 'closest_overall',
+            n_samples_representative: Optional[int] = None,
+            random_state: Optional[int] = None,
+            n_jobs: int = 1,
+            max_iter: int = 100,
+            save_path: bool = False,
+            **kwargs
+    ):
+        self.n_features = n_features
+        self.repetitions = repetitions
+        self.verbose = verbose
+        self.base_model = base_model
+        self.representative_method = representative_method
+        self.n_samples_representative = n_samples_representative
+        self._random_state = random_state
+        self.n_jobs = n_jobs
+        self.max_iter = max_iter
+        self.save_path = save_path
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    @property
+    def random_state(self):
+        if self._random_state is None:
+            self._random_state = np.random.default_rng()
+        elif isinstance(self._random_state, int):
+            self._random_state = np.random.default_rng(self._random_state)
+        return self._random_state
+
+    def get_base_model(self):
+        if self.base_model == 'kmeans':
+            return KMeansSklearn()
+        elif self.base_model == 'hdbscan':
+            return HDBSCAN()
+        elif self.base_model == 'sc-srgf':
+            return SpectralSubspaceRandomization()
+        else:
+            raise ValueError('base_model must be "kmeans", "hdbscan" or "sc-srgf"')
+        
+    def sample_X_j(self, X_j, child_random_state):
+        n_all_features = X_j.shape[1]
+        if isinstance(self.n_features, int):
+            size = min(self.n_features, n_all_features - 1)
+            features = child_random_state.choice(n_all_features, size=size, replace=False)
+        elif isinstance(self.n_features, float):
+            # sample a percentage of features
+            if self.n_features < 0 or self.n_features > 1:
+                raise ValueError('n_features must be between 0 and 1')
+            features_size = int(self.n_features * n_all_features)
+            size = min(features_size, n_all_features - 1)
+            features = child_random_state.choice(n_all_features, size=size, replace=False)
+        elif self.n_features == 'full':
+            # full kmeans
+            features = np.arange(n_all_features)
+        else:
+            raise ValueError(f'n_features {self.n_features} not valid.')
+        X_p = X_j[:, features]
+        return X_p
+    
+    def get_labels_from_base_model(self, base_model, X_p):
+        labels = base_model.fit_predict(X_p)
+        return labels
+
+    def run_one_repetition(self, X_j, repetition):
+        if self.verbose:
+            print('Starting repetition', repetition)
+        child_random_state = np.random.default_rng([self.random_state.integers(0, 1e6), repetition])
+        base_model = self.get_base_model()
+        X_p = self.sample_X_j(X_j, child_random_state)
+        labels = self.get_labels_from_base_model(base_model, X_p)
+        return labels
+    
+    def get_representative_cluster_assignments(self, X_j):
+        # run the repetitions in parallel
+        # obs.: For most cases, the overhead of parallelization is not worth it as internally KMeans is already
+        # parallelizing with threads, but it may be useful for very large datasets.
+        if self.verbose:
+            print('Starting consensus assignment')
+        labels_i = Parallel(n_jobs=self.n_jobs)(delayed(self.run_one_repetition)(X_j, r) for r in range(self.repetitions))
+        labels_i = np.array(labels_i).T
+
+        # factorize labels using numpy (codes are from 0 to n_clusters-1)
+        _, codes = np.unique(labels_i, axis=0, return_inverse=True)
+        return codes
+    
+    def compute_similarities(self, X_cluster):
+        if self.verbose:
+            print('Computing similarities with method', self.representative_method)
+
+        if self.representative_method == 'closest_overall':
+            # calculate the cosine similarities (without normalization) between all samples in the cluster and
+            # pick the one with the largest sum
+            # this is the most computationally expensive method (O(n^2))
+            cluster_similarities = X_cluster @ X_cluster.T
+
+        elif self.representative_method == 'closest_to_centroid':
+            # calculate the centroid of the cluster and pick the sample most similar to it
+            # this is the second most computationally expensive method (O(n))
+            centroid = X_cluster.mean(axis=0)
+            cluster_similarities = X_cluster @ centroid
+
+        # elif self.representative_method == 'centroid':
+        #     # calculate the centroid of the cluster and use it as the representative sample
+        #     # this is the least computationally expensive method (O(1))
+        #     centroid = X_cluster.mean(axis=0)
+        #     # we arbitrarily pick the first sample as the representative of the cluster and change its
+        #     # values to the centroid values so we can use the same logic as the other methods
+        #     most_similar_sample_idx = local_cluster_original_idx[local_cluster_sampled_idx[0]]
+        #     # we need to change the original value in X
+        #     X[most_similar_sample_idx, :] = centroid
+
+        elif self.representative_method == 'rbf':
+            # replace cosine_distance by rbf_kernel
+            cluster_similarities = rbf_kernel(X_cluster)
+
+        elif self.representative_method == 'rbf_median':
+            # replace cosine_distance by rbf_kernel with gamma = median
+            cluster_distances = euclidean_distances(X_cluster)
+            median_distance = np.median(cluster_distances)
+            gamma = 1 / (2 * median_distance)
+            cluster_similarities = np.exp(-gamma * cluster_distances)
+
+        elif self.representative_method == 'laplacian':
+            # replace cosine_distance by laplacian_kernel
+            cluster_similarities = laplacian_kernel(X_cluster)
+
+        elif self.representative_method == 'laplacian_median':
+            # replace cosine_distance by laplacian_kernel with gamma = median
+            cluster_distances = manhattan_distances(X_cluster)
+            median_distance = np.median(cluster_distances)
+            gamma = 1 / (2 * median_distance)
+            cluster_similarities = np.exp(-gamma * cluster_distances)
+        else:
+            raise ValueError('representative_method must be closest_overall, closest_to_centroid,'
+                                ' rbf, rbf_median, laplacian or laplacian_median')
+        return cluster_similarities
+
+    
+    def choose_new_representatives(self, X_representatives, representatives_indexes, representative_cluster_assignments, unique_labels):
+        new_representatives_indexes = []
+        for label in unique_labels:
+            if self.verbose:
+                print('Choosing new representative sample for cluster', label)
+            cluster_mask = representative_cluster_assignments == label
+            X_cluster = X_representatives[cluster_mask]
+            X_cluster_indexes = representatives_indexes[cluster_mask]
+            cluster_similarities = self.compute_similarities(X_cluster)
+            cluster_similarities_sum = cluster_similarities.sum(axis=0)
+            most_similar_sample_idx = X_cluster_indexes[np.argmax(cluster_similarities_sum)]
+            new_representatives_indexes.append(most_similar_sample_idx)
+        return np.array(new_representatives_indexes)
+    
+    def get_new_clusters(self, clusters, representatives_indexes, representative_cluster_assignments, unique_labels):
+        new_clusters = [[] for _ in range(len(unique_labels))]
+        if self.verbose:
+            print('Getting new clusters')
+        for cluster, rep_idx in zip(clusters, representatives_indexes):
+            cluster_assignment = representative_cluster_assignments[rep_idx]
+            new_clusters[cluster_assignment].extend(cluster)
+        return new_clusters
+    
+    def get_labels_from_clusters(self, clusters):
+        if self.verbose:
+            print('Getting labels from clusters')
+        cluster_lengths = [len(cluster) for cluster in clusters]
+        cluster_indexes = np.concatenate(clusters)
+        cluster_labels = np.repeat(np.arange(len(clusters)), cluster_lengths)
+        labels = np.empty(cluster_indexes.shape[0], dtype=int)
+        labels[cluster_indexes] = cluster_labels
+        return labels
+
+    def fit(self, X, y=None, sample_weight=None):
+        if self.verbose:
+            print('Starting fit')
+        n_samples = X.shape[0]
+
+        # we will work with numpy (arrays) for speed
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+
+        # representative samples
+        X_representatives = X
+        # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
+        # n_samples as representatives
+        representatives_indexes = np.arange(n_samples)
+        # list of lists of indexes of the samples of each cluster
+        clusters = [[i] for i in range(n_samples)]
+        
+        representative_cluster_assignments = np.arange(n_samples)
+        # unique labels is actually np.arange(n_samples) in the first iteration, but we initialize it with an empty 
+        # array to enter the loop
+        unique_labels = []
+
+        i = 0
+        self.n_clusters_iter_ = []
+        self.labels_iter_ = []
+        # iterate until every sequence of labels is unique
+        while len(representative_cluster_assignments) != len(unique_labels) and i < self.max_iter:
+            if self.verbose:
+                print('Iteration', i)
+
+            # consensus assignment
+            representative_cluster_assignments = self.get_representative_cluster_assignments(X_representatives)
+
+            unique_labels = np.unique(representative_cluster_assignments)
+            n_clusters = len(unique_labels)
+            self.n_clusters_iter_.append(n_clusters)
+
+            # using representative_method
+            new_representatives_indexes = self.choose_new_representatives(
+                X_representatives, representatives_indexes, representative_cluster_assignments, unique_labels)
+
+            new_clusters = self.get_new_clusters(
+                clusters, representatives_indexes, representative_cluster_assignments, unique_labels)
+            
+            if self.save_path:
+                labels = self.get_labels_from_clusters(new_clusters)
+                self.labels_iter_.append(labels)
+
+            # update variables
+            clusters = new_clusters
+            representatives_indexes = new_representatives_indexes
+            X_representatives = X[representatives_indexes, :]
+            i += 1
+
+        self.n_clusters_ = len(clusters)
+        self.labels_ = self.get_labels_from_clusters(clusters)
+        self.labels_ = np.concatenate(self.labels_)
+        self.cluster_representatives_ = X_representatives
+        self.cluster_representatives_labels_ = representative_cluster_assignments
+        self.n_iter_ = i
+        return self
+
+
 class RecursiveClustering(ClusterMixin, BaseEstimator):
     default_kmeans_max_iter = 300
     minibatch_kmeans_max_iter = 100
@@ -25,21 +267,21 @@ class RecursiveClustering(ClusterMixin, BaseEstimator):
 
     def __init__(
             self,
-            components_size=10,
-            repetitions=10,
-            verbose=0,
+            components_size:int = 10,
+            repetitions: int = 10,
+            verbose: int | bool = 0,
             # base model parameters
-            base_model='kmeans',
-            kmeans_n_clusters=3,
-            kmeans_init='auto',
-            kmeans_n_init='auto',
-            kmeans_max_iter='auto',
-            kmeans_tol=1e-4,
-            random_state=None,
-            kmeans_algorithm='lloyd',
-            representative_method='closest_overall',
-            n_samples_representative=None,
-            n_jobs=1,
+            base_model: str | type[BaseEstimator] = 'kmeans',
+            kmeans_n_clusters: int = 3,
+            kmeans_init: str = 'auto',
+            kmeans_n_init: int | str = 'auto',
+            kmeans_max_iter: int |str = 'auto',
+            kmeans_tol: float = 1e-4,
+            random_state: Optional[int] = None,
+            kmeans_algorithm: str = 'lloyd',
+            representative_method: str = 'closest_overall',
+            n_samples_representative: Optional[int] = None,
+            n_jobs: int = 1,
             # kernel kmeans parameters
             kernel_kmeans=False,
             kkmeans_kernel='rbf',
