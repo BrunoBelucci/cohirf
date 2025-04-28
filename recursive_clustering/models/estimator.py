@@ -1,10 +1,11 @@
 from typing import Optional
 import numpy as np
 import dask.array as da
-from sklearn.base import BaseEstimator, ClusterMixin
+from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import (cosine_distances, rbf_kernel, laplacian_kernel, euclidean_distances,
                                       manhattan_distances)
+from sklearn.kernel_approximation import RBFSampler, Nystroem
 import dask.array as da
 import dask.dataframe as dd
 from dask_ml.metrics.pairwise import (euclidean_distances as dask_euclidean_distances, rbf_kernel as dask_rbf_kernel, 
@@ -17,16 +18,21 @@ import pandas as pd
 class BaseCoHiRF:
     def __init__(
             self,
-            n_features: int | float | str = 10,
             repetitions: int = 10,
             verbose: int | bool = 0,
-            base_model: str | type[BaseEstimator] = 'kmeans',
             representative_method: str = 'closest_overall',
             n_samples_representative: Optional[int] = None,
             random_state: Optional[int] = None,
             n_jobs: int = 1,
             max_iter: int = 100,
             save_path: bool = False,
+            # base model parameters
+            base_model: str | type[BaseEstimator] = 'kmeans',
+            base_model_kwargs: Optional[dict] = None,
+            # sampling parameters
+            sampling_method: str | type[TransformerMixin] = 'random',
+            n_features: int | float | str = 10,
+            sampling_kwargs: Optional[dict] = None,
             # batch parameters
             batch_size: Optional[int] = None,
             n_samples_threshold: int | str = 'batch_size',
@@ -37,6 +43,9 @@ class BaseCoHiRF:
         self.repetitions = repetitions
         self.verbose = verbose
         self.base_model = base_model
+        self.base_model_kwargs = base_model_kwargs if base_model_kwargs is not None else {}
+        self.sampling_method = sampling_method
+        self.sampling_kwargs = sampling_kwargs if sampling_kwargs is not None else {}
         self.representative_method = representative_method
         self.n_samples_representative = n_samples_representative
         self._random_state = random_state
@@ -69,11 +78,25 @@ class BaseCoHiRF:
             self._random_state = np.random.default_rng(self._random_state)
         return self._random_state
 
-    def get_base_model(self, random_seed):
-        raise ValueError(f'base_model {self.base_model} is not valid.')
+    def get_base_model(self, child_random_state):
+        random_seed = child_random_state.integers(0, 1e6)
+        if isinstance(self.base_model, str):
+            if self.base_model == 'kmeans':
+                return KMeans(**self.base_model_kwargs, random_state=random_seed)
+            else:
+                raise ValueError(f'base_model {self.base_model} is not valid.')
+        elif issubclass(self.base_model, BaseEstimator):
+            base_model = self.base_model(**self.base_model_kwargs)
+            if hasattr(base_model, 'random_state'):
+                base_model.set_params(random_state=random_seed)
+            elif hasattr(base_model, 'random_seed'):
+                base_model.set_params(random_seed=random_seed)
+            return base_model
+        else:
+            raise ValueError(f'base_model {self.base_model} is not valid.')
         
-    def sample_X_j(self, X_j, child_random_state):
-        n_all_features = X_j.shape[1]
+    def sample_X_j(self, X_representative, child_random_state):
+        n_all_features = X_representative.shape[1]
         if isinstance(self.n_features, int):
             size = min(self.n_features, n_all_features - 1)
             features = child_random_state.choice(n_all_features, size=size, replace=False)
@@ -89,20 +112,34 @@ class BaseCoHiRF:
             features = np.arange(n_all_features)
         else:
             raise ValueError(f'n_features {self.n_features} not valid.')
-        X_p = X_j[:, features]
+        X_p = X_representative[:, features]
+        
+        if isinstance(self.sampling_method, str):
+            if self.sampling_method == 'random':
+                pass  # we already sampled 
+        elif issubclass(self.sampling_method, TransformerMixin):
+            # perform a transformation
+            transformer = self.sampling_method(**self.sampling_kwargs)
+            if hasattr(transformer, 'random_state'):
+                transformer.set_params(random_state=child_random_state.integers(0, 1e6))
+            elif hasattr(transformer, 'random_seed'):
+                transformer.set_params(random_seed=child_random_state.integers(0, 1e6))
+            X_p = transformer.fit_transform(X_p)
+        else:
+            raise ValueError(f'sampling_method {self.sampling_method} is not valid.')
+        
         return X_p
     
     def get_labels_from_base_model(self, base_model, X_p):
         labels = base_model.fit_predict(X_p)
         return labels
 
-    def run_one_repetition(self, X_j, repetition):
+    def run_one_repetition(self, X_representative, repetition):
         if self.verbose:
             print('Starting repetition', repetition)
         child_random_state = np.random.default_rng([self.random_state.integers(0, 1e6), repetition])
-        random_seed = child_random_state.integers(0, 1e6)
-        base_model = self.get_base_model(random_seed)
-        X_p = self.sample_X_j(X_j, child_random_state)
+        base_model = self.get_base_model(child_random_state)
+        X_p = self.sample_X_j(X_representative, child_random_state)
         labels = self.get_labels_from_base_model(base_model, X_p)
         return labels
     
@@ -351,19 +388,57 @@ class BaseCoHiRF:
         return labels
     
 
-class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
+class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
     def __init__(
             self,
-            n_features: int | float | str = 10,
             repetitions: int = 10,
             verbose: int | bool = 0,
-            base_model: str | type[BaseEstimator] = 'kmeans',
             representative_method: str = 'closest_overall',
             n_samples_representative: Optional[int] = None,
             random_state: Optional[int] = None,
             n_jobs: int = 1,
             max_iter: int = 100,
             save_path: bool = False,
+            # base model parameters
+            base_model: str | type[BaseEstimator] = 'kmeans',
+            base_model_kwargs: Optional[dict] = None,
+            # sampling parameters
+            sampling_method: str | type[TransformerMixin] = 'random',
+            n_features: int | float | str = 10,
+            sampling_kwargs: Optional[dict] = None,
+            # batch parameters
+            batch_size: Optional[int] = None,
+            n_samples_threshold: int | str = 'batch_size',
+            use_dask: bool | str = 'auto',
+    ):
+        super().__init__(repetitions, verbose, representative_method, n_samples_representative, random_state,
+                         n_jobs, max_iter, save_path, base_model=base_model, base_model_kwargs=base_model_kwargs,
+                         sampling_method=sampling_method, n_features=n_features, sampling_kwargs=sampling_kwargs,
+                         batch_size=batch_size, n_samples_threshold=n_samples_threshold, use_dask=use_dask)
+
+
+class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
+    def __init__(
+            self,
+            repetitions: int = 10,
+            verbose: int | bool = 0,
+            representative_method: str = 'closest_overall',
+            n_samples_representative: Optional[int] = None,
+            random_state: Optional[int] = None,
+            n_jobs: int = 1,
+            max_iter: int = 100,
+            save_path: bool = False,
+            # base model parameters
+            base_model: str | type[BaseEstimator] = 'kmeans',
+            base_model_kwargs: Optional[dict] = None,
+            # sampling parameters
+            sampling_method: str | type[TransformerMixin] = 'random',
+            n_features: int | float | str = 10,
+            sampling_kwargs: Optional[dict] = None,
+            # batch parameters
+            batch_size: Optional[int] = None,
+            n_samples_threshold: int | str = 'batch_size',
+            use_dask: bool | str = 'auto',
             # kmeans parameters
             kmeans_n_clusters: int = 3,
             kmeans_init: str = 'k-means++',
@@ -371,10 +446,29 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
             kmeans_max_iter: int = 300,
             kmeans_tol: float = 1e-4,
     ):
-        super().__init__(n_features, repetitions, verbose, base_model, representative_method, n_samples_representative,
-                         random_state, n_jobs, max_iter, save_path, kmeans_n_clusters=kmeans_n_clusters,
-                         kmeans_init=kmeans_init, kmeans_n_init=kmeans_n_init, kmeans_max_iter=kmeans_max_iter,
-                         kmeans_tol=kmeans_tol)
+        super().__init__(
+            repetitions=repetitions,
+            verbose=verbose,
+            representative_method=representative_method,
+            n_samples_representative=n_samples_representative,
+            random_state=random_state,
+            n_jobs=n_jobs,
+            max_iter=max_iter,
+            save_path=save_path,
+            base_model=base_model,
+            base_model_kwargs=base_model_kwargs,
+            sampling_method=sampling_method,
+            n_features=n_features,
+            sampling_kwargs=sampling_kwargs,
+            batch_size=batch_size,
+            n_samples_threshold=n_samples_threshold,
+            use_dask=use_dask,
+            kmeans_n_clusters=kmeans_n_clusters,
+            kmeans_init=kmeans_init,
+            kmeans_n_init=kmeans_n_init,
+            kmeans_max_iter=kmeans_max_iter,
+            kmeans_tol=kmeans_tol,
+        )
         
     def get_base_model(self, random_seed):
         if self.base_model == 'kmeans':
