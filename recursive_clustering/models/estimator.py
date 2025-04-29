@@ -353,7 +353,16 @@ class BaseCoHiRF:
             
             self.n_clusters_iter_.append(new_n_clusters)
 
-            new_clusters = self.get_new_clusters(clusters, new_representative_cluster_assignments, new_n_clusters)
+            if i == 0:
+                # small optimization for first iteration: we dont need to iterate through all the clusters (samples)
+                # we can just use the new representative cluster assignments
+                new_clusters = [[] for _ in range(new_n_clusters)]
+                for j in range(new_n_clusters):
+                    representative_cluster_assignments = np.where(new_representative_cluster_assignments == j)[0]
+                    new_clusters[j] = representative_cluster_assignments
+            else:
+                # we need to iterate through all the (old) clusters
+                new_clusters = self.get_new_clusters(clusters, new_representative_cluster_assignments, new_n_clusters)
             
             if self.save_path:
                 labels = self.get_labels_from_clusters(new_clusters)
