@@ -13,6 +13,7 @@ from dask_ml.metrics.pairwise import (euclidean_distances as dask_euclidean_dist
 from joblib import Parallel, delayed
 import optuna
 import pandas as pd
+from recursive_clustering.models.kernel_kmeans import KernelKMeans
 
 
 class BaseCoHiRF:
@@ -30,9 +31,11 @@ class BaseCoHiRF:
             base_model: str | type[BaseEstimator] = 'kmeans',
             base_model_kwargs: Optional[dict] = None,
             # sampling parameters
-            sampling_method: str | type[TransformerMixin] = 'random',
-            n_features: int | float | str = 10,
-            sampling_kwargs: Optional[dict] = None,
+            n_features: int | float | str = 10,  # number of random features that will be sampled
+            transform_method: str | type[TransformerMixin] = None,
+            transform_kwargs: Optional[dict] = None,
+            sample_than_transform: bool = True,
+            transform_once_per_iteration: bool = False,
             # batch parameters
             batch_size: Optional[int] = None,
             n_samples_threshold: int | str = 'batch_size',
@@ -44,8 +47,10 @@ class BaseCoHiRF:
         self.verbose = verbose
         self.base_model = base_model
         self.base_model_kwargs = base_model_kwargs if base_model_kwargs is not None else {}
-        self.sampling_method = sampling_method
-        self.sampling_kwargs = sampling_kwargs if sampling_kwargs is not None else {}
+        self.transform_method = transform_method
+        self.transform_kwargs = transform_kwargs if transform_kwargs is not None else {}
+        self.sample_than_transform = sample_than_transform
+        self.transform_once_per_iteration = transform_once_per_iteration
         self.representative_method = representative_method
         self.n_samples_representative = n_samples_representative
         self._random_state = random_state
@@ -95,8 +100,27 @@ class BaseCoHiRF:
         else:
             raise ValueError(f'base_model {self.base_model} is not valid.')
         
-    def sample_X_j(self, X_representative, child_random_state):
-        n_all_features = X_representative.shape[1]
+    def sampling_transform_X(self, X, child_random_state):
+        if isinstance(self.transform_method, str):
+            if self.transform_method == 'random':
+                X_p = X  # we already sampled 
+        elif isinstance(self.transform_method, type) and issubclass(self.transform_method, TransformerMixin):
+            # perform a transformation
+            transformer = self.transform_method(**self.transform_kwargs)
+            if hasattr(transformer, 'random_state'):
+                transformer.set_params(random_state=child_random_state.integers(0, 1e6))
+            elif hasattr(transformer, 'random_seed'):
+                transformer.set_params(random_seed=child_random_state.integers(0, 1e6))
+            X_p = transformer.fit_transform(X)
+        elif self.transform_method is None:
+            X_p = X
+        else:
+            raise ValueError(f'sampling_method {self.transform_method} is not valid.')
+        return X_p
+        
+    def random_sample(self, X, child_random_state):
+        n_all_features = X.shape[1]
+        # random sample
         if isinstance(self.n_features, int):
             size = min(self.n_features, n_all_features - 1)
             features = child_random_state.choice(n_all_features, size=size, replace=False)
@@ -112,22 +136,22 @@ class BaseCoHiRF:
             features = np.arange(n_all_features)
         else:
             raise ValueError(f'n_features {self.n_features} not valid.')
-        X_p = X_representative[:, features]
-        
-        if isinstance(self.sampling_method, str):
-            if self.sampling_method == 'random':
-                pass  # we already sampled 
-        elif issubclass(self.sampling_method, TransformerMixin):
-            # perform a transformation
-            transformer = self.sampling_method(**self.sampling_kwargs)
-            if hasattr(transformer, 'random_state'):
-                transformer.set_params(random_state=child_random_state.integers(0, 1e6))
-            elif hasattr(transformer, 'random_seed'):
-                transformer.set_params(random_seed=child_random_state.integers(0, 1e6))
-            X_p = transformer.fit_transform(X_p)
+        X_p = X[:, features]
+        return X_p
+
+    def sample_X_j(self, X_representative, child_random_state):
+        if self.transform_once_per_iteration:
+            # we only do random sampling because data is already transformed
+            X_p = self.random_sample(X_representative, child_random_state)
         else:
-            raise ValueError(f'sampling_method {self.sampling_method} is not valid.')
-        
+            if self.sample_than_transform:
+                X_p = self.random_sample(X_representative, child_random_state)
+                X_p = self.sampling_transform_X(X_p, child_random_state)
+            
+            else:
+                X_p = self.sampling_transform_X(X_representative, child_random_state)
+                X_p = self.random_sample(X_p, child_random_state)
+            
         return X_p
     
     def get_labels_from_base_model(self, base_model, X_p):
@@ -328,7 +352,10 @@ class BaseCoHiRF:
             else:
                 not_resampled_indexes = None
 
-            # consensus assignment
+            # consensus assignment (it is here that we repeatdly apply our base model)
+            if self.transform_once_per_iteration:
+                # we transform once the data here
+                X_representatives = self.sampling_transform_X(X_representatives, self.random_state)
             new_representative_cluster_assignments = self.get_representative_cluster_assignments(X_representatives)
             new_clusters_labels = np.unique(new_representative_cluster_assignments)
             new_n_clusters = len(new_clusters_labels)
@@ -412,9 +439,11 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
             base_model: str | type[BaseEstimator] = 'kmeans',
             base_model_kwargs: Optional[dict] = None,
             # sampling parameters
-            sampling_method: str | type[TransformerMixin] = 'random',
-            n_features: int | float | str = 10,
-            sampling_kwargs: Optional[dict] = None,
+            n_features: int | float | str = 10,  # number of random features that will be sampled
+            transform_method: str | type[TransformerMixin] = None,
+            transform_kwargs: Optional[dict] = None,
+            sample_than_transform: bool = True,
+            transform_once_per_iteration: bool = False,
             # batch parameters
             batch_size: Optional[int] = None,
             n_samples_threshold: int | str = 'batch_size',
@@ -422,8 +451,9 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
     ):
         super().__init__(repetitions, verbose, representative_method, n_samples_representative, random_state,
                          n_jobs, max_iter, save_path, base_model=base_model, base_model_kwargs=base_model_kwargs,
-                         sampling_method=sampling_method, n_features=n_features, sampling_kwargs=sampling_kwargs,
-                         batch_size=batch_size, n_samples_threshold=n_samples_threshold, use_dask=use_dask)
+                         transform_method=transform_method, n_features=n_features, transform_kwargs=transform_kwargs,
+                         batch_size=batch_size, n_samples_threshold=n_samples_threshold, use_dask=use_dask,
+                         sample_than_transform=sample_than_transform, transform_once_per_iteration=transform_once_per_iteration)
 
 
 class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
@@ -441,43 +471,21 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
             base_model: str | type[BaseEstimator] = 'kmeans',
             base_model_kwargs: Optional[dict] = None,
             # sampling parameters
-            sampling_method: str | type[TransformerMixin] = 'random',
-            n_features: int | float | str = 10,
-            sampling_kwargs: Optional[dict] = None,
+            n_features: int | float | str = 10,  # number of random features that will be sampled
+            transform_method: str | type[TransformerMixin] = None,
+            transform_kwargs: Optional[dict] = None,
+            sample_than_transform: bool = True,
+            transform_once_per_iteration: bool = False,
             # batch parameters
             batch_size: Optional[int] = None,
             n_samples_threshold: int | str = 'batch_size',
             use_dask: bool | str = 'auto',
-            # kmeans parameters
-            kmeans_n_clusters: int = 3,
-            kmeans_init: str = 'k-means++',
-            kmeans_n_init: str | int = 'auto',
-            kmeans_max_iter: int = 300,
-            kmeans_tol: float = 1e-4,
     ):
-        super().__init__(
-            repetitions=repetitions,
-            verbose=verbose,
-            representative_method=representative_method,
-            n_samples_representative=n_samples_representative,
-            random_state=random_state,
-            n_jobs=n_jobs,
-            max_iter=max_iter,
-            save_path=save_path,
-            base_model=base_model,
-            base_model_kwargs=base_model_kwargs,
-            sampling_method=sampling_method,
-            n_features=n_features,
-            sampling_kwargs=sampling_kwargs,
-            batch_size=batch_size,
-            n_samples_threshold=n_samples_threshold,
-            use_dask=use_dask,
-            kmeans_n_clusters=kmeans_n_clusters,
-            kmeans_init=kmeans_init,
-            kmeans_n_init=kmeans_n_init,
-            kmeans_max_iter=kmeans_max_iter,
-            kmeans_tol=kmeans_tol,
-        )
+        super().__init__(repetitions, verbose, representative_method, n_samples_representative, random_state,
+                         n_jobs, max_iter, save_path, base_model=base_model, base_model_kwargs=base_model_kwargs,
+                         transform_method=transform_method, n_features=n_features, transform_kwargs=transform_kwargs,
+                         batch_size=batch_size, n_samples_threshold=n_samples_threshold, use_dask=use_dask,
+                         sample_than_transform=sample_than_transform, transform_once_per_iteration=transform_once_per_iteration)
         
     def get_base_model(self, random_seed):
         if self.base_model == 'kmeans':
