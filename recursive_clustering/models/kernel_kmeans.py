@@ -202,7 +202,12 @@ class KernelKMeans(BaseEstimator, ClusterMixin):
         sw = sample_weight if sample_weight is not None else np.ones(n_samples)
         self.sample_weight_ = sw
         for i in range(self.n_init):
-            self.labels_ = rs.randint(self.n_clusters, size=n_samples)
+            if n_samples > self.n_clusters:
+                self.labels_ = rs.randint(self.n_clusters, size=n_samples)
+            elif n_samples == self.n_clusters:
+                self.labels_ = np.arange(n_samples)
+            else:
+                raise ValueError(f"n_samples={n_samples} should be >= n_clusters={self.n_clusters}, but this should not happen as we check this in _check_fit_data")
 
             dist = np.zeros((n_samples, self.n_clusters))
             self.within_distances_ = np.zeros(self.n_clusters)
@@ -298,8 +303,19 @@ class KernelKMeans(BaseEstimator, ClusterMixin):
         # Step 2: Compute cluster weights (n_clusters,)
         cluster_weights = Z.sum(axis=0)
 
-        # Avoid division by zero (handle empty clusters)
-        cluster_weights[cluster_weights == 0] = 1
+        # Handle empty clusters
+        empty_clusters = np.where(cluster_weights == 0)[0]
+        if len(empty_clusters) > 0:
+            rs = check_random_state(self.random_state)
+            n_samples = len(self.labels_)
+            if n_samples > self.n_clusters:
+                self.labels_ = rs.randint(self.n_clusters, size=n_samples)
+            elif n_samples == self.n_clusters:
+                self.labels_ = np.arange(n_samples)
+            else:
+                raise ValueError(f"n_samples={n_samples} should be >= n_clusters={self.n_clusters}, but this should not happen as we check this in _check_fit_data")
+            self.within_distances_.fill(0)
+            return
 
         # Step 3: Compute the weighted kernel sum for each cluster
         # KZ = K @ Z gives (n_samples, n_clusters)
