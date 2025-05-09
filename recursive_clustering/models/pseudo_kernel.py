@@ -8,8 +8,8 @@ class PseudoKernelClustering:
             self,
             base_model: str | type[BaseEstimator] = 'kmeans',
             base_model_kwargs: Optional[dict] = None,
-            sampling_method: str | type[TransformerMixin] = 'kpca',
-            sampling_kwargs: Optional[dict] = None,
+            transform_method: str | type[TransformerMixin] = 'kpca',
+            transform_kwargs: Optional[dict] = None,
     ):
         """
         Initialize the PseudoKernelClustering class.
@@ -27,8 +27,8 @@ class PseudoKernelClustering:
         """
         self.base_model = base_model
         self.base_model_kwargs = base_model_kwargs if base_model_kwargs else {}
-        self.sampling_method = sampling_method
-        self.sampling_kwargs = sampling_kwargs if sampling_kwargs else {}
+        self.transform_method = transform_method
+        self.transform_kwargs = transform_kwargs if transform_kwargs else {}
 
     def get_model_instance(self):
         if isinstance(self.base_model, str):
@@ -41,12 +41,12 @@ class PseudoKernelClustering:
         return model
     
     def get_transformer_instance(self):
-        if isinstance(self.sampling_method, str):
-            if self.sampling_method == 'kpca':
+        if isinstance(self.transform_method, str):
+            if self.transform_method == 'kpca':
                 
-                transformer = KernelPCA(**self.sampling_kwargs)
-        elif isinstance(self.sampling_method, type) and issubclass(self.sampling_method, TransformerMixin):
-            transformer = self.sampling_method(**self.sampling_kwargs)
+                transformer = KernelPCA(**self.transform_kwargs)
+        elif isinstance(self.transform_method, type) and issubclass(self.transform_method, TransformerMixin):
+            transformer = self.transform_method(**self.transform_kwargs)
         else:
             raise ValueError("sampling_method must be a string or a subclass of TransformerMixin")
         return transformer
