@@ -68,6 +68,7 @@ class BaseCoHiRF:
         self.batch_size = batch_size
         self._n_samples_threshold = n_samples_threshold
         self.use_dask = use_dask
+        self.X_to_store = None
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -190,9 +191,14 @@ class BaseCoHiRF:
         _, codes = np.unique(labels_i, axis=0, return_inverse=True)
         return codes
 
-    def compute_similarities(self, X_cluster, use_dask):
+    def compute_similarities(self, X_cluster):
         if self.verbose:
             print("Computing similarities with method", self.representative_method)
+
+        if isinstance(X_cluster, da.Array):
+            use_dask = True
+        else:
+            use_dask = False
 
         if self.representative_method == "closest_overall":
             # calculate the cosine similarities (without normalization) between all samples in the cluster and
@@ -269,7 +275,6 @@ class BaseCoHiRF:
         X_representatives,
         new_representative_cluster_assignments,
         new_clusters_labels,
-        use_dask,
     ):
         new_representatives_local_indexes = []
         for label in new_clusters_labels:
@@ -286,7 +291,7 @@ class BaseCoHiRF:
                 X_cluster = X_cluster[sampled_indexes]
                 X_cluster_indexes = X_cluster_indexes[sampled_indexes]
 
-            cluster_similarities = self.compute_similarities(X_cluster, use_dask)
+            cluster_similarities = self.compute_similarities(X_cluster)
             cluster_similarities_sum = cluster_similarities.sum(axis=0)
             most_similar_sample_local_idx = X_cluster_indexes[cluster_similarities_sum.argmax()]
             new_representatives_local_indexes.append(most_similar_sample_local_idx)
@@ -353,48 +358,82 @@ class BaseCoHiRF:
         labels[cluster_indexes] = cluster_labels
         return labels
 
-    def sample_batch(self, X, representatives_absolute_indexes):
-        X = X[representatives_absolute_indexes]
+    def random_batch(self, X, representatives_absolute_indexes):
+        # sample a batch of samples
+        n_samples = representatives_absolute_indexes.shape[0]
+        n_resample = min(self.batch_size, n_samples)
+        resampled_indexes = self.random_state.choice(n_samples, size=n_resample, replace=False)
+        absolute_resampled_indexes = representatives_absolute_indexes[resampled_indexes]
+        resampled_X = X[absolute_resampled_indexes]
+        return resampled_X, absolute_resampled_indexes
+
+    def sample_batch(self, X, representatives_absolute_indexes, iteration):
         if self.batch_size is not None:
-            # sample a batch of samples
-            n_samples = X.shape[0]
-            n_resample = min(self.batch_size, n_samples)
-            resampled_indexes = self.random_state.choice(n_samples, size=n_resample, replace=False)
-            resampled_indexes = np.sort(resampled_indexes)
-            resampled_X = X[resampled_indexes]
+            if isinstance(X, da.Array):
+                # iterating by block is MUCH faster than indexing, so we ensure to at least do the first iteration through
+                # the whole dataset by block and then (when we already have the representatives_absolute_indexes of each
+                # block) we sample normally and we keep the X in memory
+                n_batches = np.ceil(X.shape[0] / self.batch_size)
+                if iteration < n_batches:
+                    # we still have to iterate through the whole dataset
+                    start_index = iteration * self.batch_size
+                    end_index = min((iteration + 1) * self.batch_size, X.shape[0])
+                    absolute_resampled_indexes = np.arange(start_index, end_index, dtype=int)
+                    resampled_X = X[start_index:end_index].compute()
+                else:
+                    # we have already iterated once through the whole dataset
+                    if len(representatives_absolute_indexes) <= self.batch_size:
+                        if self.X_to_store is None:
+                            # first time that representatives_absolute_indexes <= batch_size
+                            self.X_to_store = X[representatives_absolute_indexes].compute()
+                            self.X_to_store_indexes = representatives_absolute_indexes
+                            resampled_X = self.X_to_store
+                        else:
+                            # we already have X_to_store in memory, we will take the indexes from it
+                            indexes_to_take = np.isin(self.X_to_store_indexes, representatives_absolute_indexes)
+                            resampled_X = self.X_to_store[indexes_to_take]
+                        absolute_resampled_indexes = representatives_absolute_indexes
+                    else:
+                        # we still have more representatives than batch size, we will sample a batch of them which will be
+                        # slower until we can fit the representatives in memory (hopefully we will not have to do this, or
+                        # at least not too many times)
+                        resampled_X, absolute_resampled_indexes = self.random_batch(X, representatives_absolute_indexes)
+                        resampled_X = resampled_X.compute()
+
+            else:
+                resampled_X, absolute_resampled_indexes = self.random_batch(X, representatives_absolute_indexes)
+
         else:
-            resampled_indexes = np.arange(X.shape[0])
-            resampled_X = X
+            # we have no batch size, we will take all the representatives
+            resampled_X = X[representatives_absolute_indexes]
+            absolute_resampled_indexes = representatives_absolute_indexes
 
-        if isinstance(resampled_X, da.Array):
-            resampled_X = resampled_X.persist()
-        return resampled_X, resampled_indexes
-    
+        return resampled_X, absolute_resampled_indexes
+
     def update_with_unsampled_batch(self, representatives_absolute_indexes, new_representatives_local_indexes, 
-                                    cluster_assignments, clusters_labels, batch_indexes):
-        n_not_sampled = len(representatives_absolute_indexes) - len(batch_indexes)
+                                    cluster_assignments, clusters_labels, representatives_absolute_resampled_indexes):
+        n_not_sampled = len(representatives_absolute_indexes) - len(representatives_absolute_resampled_indexes)
 
-        new_representatives_absolute_indexes = representatives_absolute_indexes[batch_indexes[new_representatives_local_indexes]]
+        new_representatives_absolute_indexes = representatives_absolute_resampled_indexes[new_representatives_local_indexes]
         new_cluster_assignments = cluster_assignments
         new_clusters_labels = clusters_labels
         new_n_clusters = len(new_clusters_labels)
 
         if n_not_sampled > 0:
-            not_sampled_labels = np.arange(new_n_clusters, new_n_clusters + len(n_not_sampled))
+            not_sampled_labels = np.arange(new_n_clusters, new_n_clusters + n_not_sampled)
             new_cluster_assignments = np.concatenate((new_cluster_assignments, not_sampled_labels))
             new_clusters_labels = np.concatenate((new_clusters_labels, not_sampled_labels))
 
-            not_sampled_indexes = np.setdiff1d(np.arange(len(representatives_absolute_indexes)), batch_indexes)
+            not_sampled_indexes = np.setdiff1d(representatives_absolute_indexes, representatives_absolute_resampled_indexes)
 
             new_representatives_absolute_indexes = np.concatenate(
-                (new_representatives_absolute_indexes, representatives_absolute_indexes[not_sampled_indexes])
+                (new_representatives_absolute_indexes, not_sampled_indexes)
             )
         return (
             new_representatives_absolute_indexes,
             new_cluster_assignments,
             new_clusters_labels,
         )
-
 
     def fit(self, X, y=None, sample_weight=None):
         if self.verbose:
@@ -410,19 +449,17 @@ class BaseCoHiRF:
         if self.use_dask == True:
             if not isinstance(X, da.Array):
                 X = da.from_array(X, chunks=(self.batch_size, -1))
-            use_dask = True
+            else:
+                # we ensure that the chunks are the same size as the batch size
+                X = X.rechunk((self.batch_size, -1))
         elif self.use_dask == False:
             if isinstance(X, da.Array):
                 X = X.compute()
-            use_dask = False
         elif self.use_dask == "auto":
             # we use whatever is passed
             if isinstance(X, da.Array):
-                use_dask = True
-            else:
-                use_dask = False
-
-        X_representatives = X
+                # we ensure that the chunks are the same size as the batch size
+                X = X.rechunk((self.batch_size, -1))
 
         # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
         # n_samples as representatives
@@ -443,7 +480,7 @@ class BaseCoHiRF:
             if self.verbose:
                 print("Iteration", i)
 
-            X_batch, batch_indexes = self.sample_batch(X, representatives_absolute_indexes)
+            X_batch, representatives_absolute_resampled_indexes = self.sample_batch(X, representatives_absolute_indexes, i)
 
             if self.transform_once_per_iteration:
                 # we transform once the data here
@@ -458,35 +495,34 @@ class BaseCoHiRF:
                 X_batch,
                 batch_cluster_assignments,
                 batch_clusters_labels,
-                use_dask,
             )
 
             parents = self.update_parents(
                 parents,
-                representatives_absolute_indexes[batch_indexes],  # absolute indexes of the sampled batch
+                representatives_absolute_resampled_indexes,  # absolute indexes of the sampled batch
                 batch_clusters_labels,
                 batch_cluster_assignments,
-                representatives_absolute_indexes[
-                    batch_indexes[batch_new_representatives_local_indexes]
+                representatives_absolute_resampled_indexes[
+                    batch_new_representatives_local_indexes
                 ],  # absolute indexes of the new representatives that were sampled
             )
 
-            # if there is no batch it is a simple update, otherwise it depends o the batch strategy
+            # if there is no batch it is a simple update, otherwise it depends on the batch strategy
             representatives_absolute_indexes, representative_cluster_assignments, clusters_labels = (
                 self.update_with_unsampled_batch(
                     representatives_absolute_indexes,
                     batch_new_representatives_local_indexes,
                     batch_cluster_assignments,
                     batch_clusters_labels,
-                    batch_indexes,
+                    representatives_absolute_resampled_indexes,
                 )
             )
             i += 1
 
         self.n_clusters_ = len(clusters_labels)
         self.labels_ = self.get_labels_from_parents(parents, representatives_absolute_indexes)
-        self.cluster_representatives_ = X_representatives
-        self.cluster_representatives_labels_ = representative_cluster_assignments
+        self.parents_ = parents
+        self.representatives_indexes_ = representatives_absolute_indexes
         self.n_iter_ = i
         return self
 
