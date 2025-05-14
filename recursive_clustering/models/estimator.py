@@ -330,7 +330,8 @@ class BaseCoHiRF:
         clusters_labels = representatives_indexes
 
         # list of lists of indexes of the samples of each cluster
-        clusters = [[i] for i in range(n_samples)]
+        # clusters = [[[i] for i in range(n_samples)]]
+        clusters = []  # optimization for first iteration, we dont need to iterate through all the samples
 
         i = 0
         self.n_clusters_iter_ = []
