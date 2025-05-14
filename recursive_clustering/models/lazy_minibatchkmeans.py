@@ -332,6 +332,10 @@ class LazyMiniBatchKMeans(MiniBatchKMeans):
             # x_squared_norms = x_squared_norms[init_indices]
             n_samples = X.shape[0]
             sample_weight = sample_weight[init_indices]
+        else:
+            if isinstance(X, da.Array):
+                X = X.compute()
+                X = np.ascontiguousarray(X)
 
         x_squared_norms = row_norms(X, squared=True)
 
