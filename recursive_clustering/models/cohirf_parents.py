@@ -1,6 +1,7 @@
 from typing import Optional
 import numpy as np
 import dask.array as da
+from dask.array.core import Array as DaskArray
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import (
@@ -40,7 +41,7 @@ class BaseCoHiRF:
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
         n_features: int | float | str = 10,  # number of random features that will be sampled
-        transform_method: str | type[TransformerMixin] = None,
+        transform_method: Optional[str | type[TransformerMixin]]= None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
         transform_once_per_iteration: bool = False,
@@ -113,13 +114,21 @@ class BaseCoHiRF:
         if isinstance(self.transform_method, str):
             if self.transform_method == "random":
                 X_p = X  # we already sampled
+            else:
+                raise ValueError(f"sampling_method {self.transform_method} is not valid.")
         elif isinstance(self.transform_method, type) and issubclass(self.transform_method, TransformerMixin):
             # perform a transformation
             transformer = self.transform_method(**self.transform_kwargs)
             if hasattr(transformer, "random_state"):
-                transformer.set_params(random_state=child_random_state.integers(0, 1e6))
+                try:
+                    transformer.set_params(random_state=child_random_state.integers(0, 1e6)) # type: ignore
+                except AttributeError:
+                    setattr(transformer, "random_state", child_random_state.integers(0, 1e6))
             elif hasattr(transformer, "random_seed"):
-                transformer.set_params(random_seed=child_random_state.integers(0, 1e6))
+                try:
+                    transformer.set_params(random_seed=child_random_state.integers(0, 1e6)) # type: ignore
+                except AttributeError:
+                    setattr(transformer, "random_seed", child_random_state.integers(0, 1e6))
             X_p = transformer.fit_transform(X)
         elif self.transform_method is None:
             X_p = X
@@ -170,7 +179,7 @@ class BaseCoHiRF:
     def run_one_repetition(self, X_representative, repetition):
         if self.verbose:
             print("Starting repetition", repetition)
-        child_random_state = np.random.default_rng([self.random_state.integers(0, 1e6), repetition])
+        child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), repetition])
         base_model = self.get_base_model(child_random_state)
         X_p = self.sample_X_j(X_representative, child_random_state)
         labels = self.get_labels_from_base_model(base_model, X_p)
@@ -191,11 +200,11 @@ class BaseCoHiRF:
         _, codes = np.unique(labels_i, axis=0, return_inverse=True)
         return codes
 
-    def compute_similarities(self, X_cluster):
+    def compute_similarities(self, X_cluster: DaskArray | np.ndarray):
         if self.verbose:
             print("Computing similarities with method", self.representative_method)
 
-        if isinstance(X_cluster, da.Array):
+        if isinstance(X_cluster, DaskArray):
             use_dask = True
         else:
             use_dask = False
@@ -225,19 +234,19 @@ class BaseCoHiRF:
         elif self.representative_method == "rbf":
             # replace cosine_distance by rbf_kernel
             if use_dask:
-                cluster_similarities = dask_rbf_kernel(X_cluster)
+                cluster_similarities = dask_rbf_kernel(X_cluster) # type: ignore
             else:
-                cluster_similarities = rbf_kernel(X_cluster)
+                cluster_similarities = rbf_kernel(X_cluster) # type: ignore
 
         elif self.representative_method == "rbf_median":
             # replace cosine_distance by rbf_kernel with gamma = median
             if use_dask:
-                cluster_distances = dask_euclidean_distances(X_cluster)
-                median_distance = da.median(cluster_distances)
+                cluster_distances = dask_euclidean_distances(X_cluster) # type: ignore
+                median_distance = da.median(cluster_distances) # type: ignore
                 gamma = 1 / (2 * median_distance)
-                cluster_similarities = da.exp(-gamma * cluster_distances)
+                cluster_similarities = da.exp(-gamma * cluster_distances) # type: ignore
             else:
-                cluster_distances = euclidean_distances(X_cluster)
+                cluster_distances = euclidean_distances(X_cluster) # type: ignore
                 median_distance = np.median(cluster_distances)
                 gamma = 1 / (2 * median_distance)
                 cluster_similarities = np.exp(-gamma * cluster_distances)
@@ -245,21 +254,21 @@ class BaseCoHiRF:
         elif self.representative_method == "laplacian":
             # replace cosine_distance by laplacian_kernel
             if use_dask:
-                cluster_similarities = dask_pairwise_distances(X_cluster, metric="manhattan")
+                cluster_similarities = dask_pairwise_distances(X_cluster, X_cluster, metric="manhattan") # type: ignore
                 gamma = 1 / (X_cluster.shape[0])  # default sklearn gamma
-                cluster_similarities = da.exp(-gamma * cluster_similarities)
+                cluster_similarities = da.exp(-gamma * cluster_similarities) # type: ignore
             else:
-                cluster_similarities = laplacian_kernel(X_cluster)
+                cluster_similarities = laplacian_kernel(X_cluster) # type: ignore
 
         elif self.representative_method == "laplacian_median":
             # replace cosine_distance by laplacian_kernel with gamma = median
             if use_dask:
-                cluster_distances = dask_pairwise_distances(X_cluster, metric="manhattan")
-                median_distance = da.median(cluster_distances)
+                cluster_distances = dask_pairwise_distances(X_cluster, X_cluster, metric="manhattan") # type: ignore
+                median_distance = da.median(cluster_distances) # type: ignore
                 gamma = 1 / (2 * median_distance)
-                cluster_similarities = da.exp(-gamma * cluster_distances)
+                cluster_similarities = da.exp(-gamma * cluster_distances) # type: ignore
             else:
-                cluster_distances = manhattan_distances(X_cluster)
+                cluster_distances = manhattan_distances(X_cluster) # type: ignore
                 median_distance = np.median(cluster_distances)
                 gamma = 1 / (2 * median_distance)
                 cluster_similarities = np.exp(-gamma * cluster_distances)
@@ -361,7 +370,10 @@ class BaseCoHiRF:
     def random_batch(self, X, representatives_absolute_indexes):
         # sample a batch of samples
         n_samples = representatives_absolute_indexes.shape[0]
-        n_resample = min(self.batch_size, n_samples)
+        if self.batch_size is None:
+            n_resample = n_samples
+        else:
+            n_resample = min(self.batch_size, n_samples)
         resampled_indexes = self.random_state.choice(n_samples, size=n_resample, replace=False)
         absolute_resampled_indexes = representatives_absolute_indexes[resampled_indexes]
         resampled_X = X[absolute_resampled_indexes]
@@ -369,7 +381,7 @@ class BaseCoHiRF:
 
     def sample_batch(self, X, representatives_absolute_indexes, iteration):
         if self.batch_size is not None:
-            if isinstance(X, da.Array):
+            if isinstance(X, DaskArray):
                 # iterating by block is MUCH faster than indexing, so we ensure to at least do the first iteration through
                 # the whole dataset by block and then (when we already have the representatives_absolute_indexes of each
                 # block) we sample normally and we keep the X in memory
@@ -447,19 +459,19 @@ class BaseCoHiRF:
             X = X.to_dask_array(lengths=True)
 
         if self.use_dask == True:
-            if not isinstance(X, da.Array):
-                X = da.from_array(X, chunks=(self.batch_size, -1))
+            if not isinstance(X, DaskArray):
+                X = da.from_array(X, chunks=(self.batch_size, -1)) # type: ignore
             else:
                 # we ensure that the chunks are the same size as the batch size
-                X = X.rechunk((self.batch_size, -1))
+                X = X.rechunk((self.batch_size, -1))  # type: ignore
         elif self.use_dask == False:
-            if isinstance(X, da.Array):
+            if isinstance(X, DaskArray):
                 X = X.compute()
         elif self.use_dask == "auto":
             # we use whatever is passed
-            if isinstance(X, da.Array):
+            if isinstance(X, DaskArray):
                 # we ensure that the chunks are the same size as the batch size
-                X = X.rechunk((self.batch_size, -1))
+                X = X.rechunk((self.batch_size, -1))  # type: ignore
 
         # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
         # n_samples as representatives
@@ -523,6 +535,7 @@ class BaseCoHiRF:
         self.labels_ = self.get_labels_from_parents(parents, representatives_absolute_indexes)
         self.parents_ = parents
         self.representatives_indexes_ = representatives_absolute_indexes
+        self.cluster_representatives_ = X[representatives_absolute_indexes] # type: ignore
         self.n_iter_ = i
         return self
 
@@ -531,9 +544,13 @@ class BaseCoHiRF:
 
     def predict(self, X):
         # find from each cluster representative each sample is closest to
-        distances = cosine_distances(X, self.cluster_representatives_)
-        labels = np.argmin(distances, axis=1)
-        labels = self.cluster_representatives_labels_[labels]
+        cluster_representatives_ = getattr(self, "cluster_representatives_", None)
+        if cluster_representatives_ is None:
+            raise ValueError("The model has not been fitted yet. Please call fit() before predict().")
+        else:
+            distances = cosine_distances(X, np.asarray(self.cluster_representatives_))
+            labels = np.argmin(distances, axis=1)
+            labels = self.labels_[labels]
         return labels
 
 
@@ -553,7 +570,7 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
         n_features: int | float | str = 10,  # number of random features that will be sampled
-        transform_method: str | type[TransformerMixin] = None,
+        transform_method: Optional[str | type[TransformerMixin]] = None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
         transform_once_per_iteration: bool = False,
@@ -600,7 +617,7 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
         n_features: int | float | str = 10,  # number of random features that will be sampled
-        transform_method: str | type[TransformerMixin] = None,
+        transform_method: Optional[str | type[TransformerMixin]] = None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
         transform_once_per_iteration: bool = False,
@@ -608,6 +625,12 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         batch_size: Optional[int] = None,
         n_samples_threshold: int | str = "batch_size",
         use_dask: bool | str = "auto",
+        # kmeans parameters
+        kmeans_n_clusters: int = 3,
+        kmeans_init: str = "k-means++",
+        kmeans_n_init: str | int = 'auto',
+        kmeans_max_iter: int = 300,
+        kmeans_tol: float = 1e-4,
     ):
         super().__init__(
             repetitions,
@@ -629,17 +652,22 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
             sample_than_transform=sample_than_transform,
             transform_once_per_iteration=transform_once_per_iteration,
         )
+        self.kmeans_n_clusters = kmeans_n_clusters
+        self.kmeans_init = kmeans_init
+        self.kmeans_n_init = kmeans_n_init
+        self.kmeans_max_iter = kmeans_max_iter
+        self.kmeans_tol = kmeans_tol
 
-    def get_base_model(self, random_seed):
+    def get_base_model(self, child_random_state):
         if self.base_model == "kmeans":
             return KMeans(
                 n_clusters=self.kmeans_n_clusters,
-                init=self.kmeans_init,
-                n_init=self.kmeans_n_init,
+                init=self.kmeans_init, # type: ignore
+                n_init=self.kmeans_n_init, # type: ignore
                 max_iter=self.kmeans_max_iter,
                 tol=self.kmeans_tol,
                 verbose=self.verbose,
-                random_state=random_seed,
+                random_state=child_random_state,
             )
         else:
             raise ValueError(f"base_model {self.base_model} is not valid.")
