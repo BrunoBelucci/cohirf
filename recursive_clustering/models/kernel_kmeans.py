@@ -203,7 +203,13 @@ class KernelKMeans(BaseEstimator, ClusterMixin):
         self.sample_weight_ = sw
         for i in range(self.n_init):
             if n_samples > self.n_clusters:
-                self.labels_ = rs.randint(self.n_clusters, size=n_samples)
+                # Ensure at least one sample per cluster
+                self.labels_ = np.empty(n_samples, dtype=int)
+                indices = rs.permutation(n_samples)
+                self.labels_[indices[:self.n_clusters]] = np.arange(self.n_clusters)
+                # Assign the rest randomly
+                self.labels_[indices[self.n_clusters:]] = rs.randint(self.n_clusters,
+                                                                     size=n_samples - self.n_clusters)
             elif n_samples == self.n_clusters:
                 self.labels_ = np.arange(n_samples)
             else:
@@ -309,7 +315,11 @@ class KernelKMeans(BaseEstimator, ClusterMixin):
             rs = check_random_state(self.random_state)
             n_samples = len(self.labels_)
             if n_samples > self.n_clusters:
-                self.labels_ = rs.randint(self.n_clusters, size=n_samples)
+                # Ensure at least one sample per cluster
+                indices = rs.permutation(n_samples)
+                self.labels_[indices[: self.n_clusters]] = np.arange(self.n_clusters)
+                # Assign the rest randomly
+                self.labels_[indices[self.n_clusters :]] = rs.randint(self.n_clusters, size=n_samples - self.n_clusters)
             elif n_samples == self.n_clusters:
                 self.labels_ = np.arange(n_samples)
             else:
