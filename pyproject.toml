@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "recursive_clustering"
-version = "0.2"
+version = "2.0"
 description = """recursive_clustering"""
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
