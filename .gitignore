@@ -5,3 +5,5 @@
 *db/
 *run_scripts/
 results/
+.vscode/
+.pytest_cache/
