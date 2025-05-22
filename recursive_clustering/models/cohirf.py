@@ -1,7 +1,5 @@
-from typing import Optional
+from typing import Literal, Optional
 import numpy as np
-import dask.array as da
-from dask.array.core import Array as DaskArray
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import (
@@ -11,22 +9,13 @@ from sklearn.metrics.pairwise import (
     euclidean_distances,
     manhattan_distances,
 )
-from sklearn.kernel_approximation import RBFSampler, Nystroem
-import dask.array as da
-import dask.dataframe as dd
-from dask_ml.metrics.pairwise import (
-    euclidean_distances as dask_euclidean_distances,
-    rbf_kernel as dask_rbf_kernel,
-    pairwise_distances as dask_pairwise_distances,
-)
+from sklearn.decomposition import PCA
 from joblib import Parallel, delayed
 import optuna
 import pandas as pd
-from recursive_clustering.models.kernel_kmeans import KernelKMeans
 
 
 class BaseCoHiRF:
-
     def __init__(
         self,
         repetitions: int = 10,
@@ -37,19 +26,16 @@ class BaseCoHiRF:
         n_jobs: int = 1,
         max_iter: int = 100,
         save_path: bool = False,
+        hierarchy_strategy: Literal['parents', 'clusters'] = "parents",
         # base model parameters
         base_model: str | type[BaseEstimator] = "kmeans",
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
         n_features: int | float | str = 10,  # number of random features that will be sampled
-        transform_method: Optional[str | type[TransformerMixin]] = None,
+        transform_method: Optional[str | type[TransformerMixin]]= None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
         transform_once_per_iteration: bool = False,
-        # batch parameters
-        batch_size: Optional[int] = None,
-        n_samples_threshold: int | str = "batch_size",
-        use_dask: bool | str = "auto",
         **kwargs,
     ):
         self.n_features = n_features
@@ -67,23 +53,9 @@ class BaseCoHiRF:
         self.n_jobs = n_jobs
         self.max_iter = max_iter
         self.save_path = save_path
-        self.batch_size = batch_size
-        self._n_samples_threshold = n_samples_threshold
-        self.use_dask = use_dask
+        self.hierarchy_strategy = hierarchy_strategy
         for key, value in kwargs.items():
             setattr(self, key, value)
-
-    @property
-    def n_samples_threshold(self):
-        if isinstance(self._n_samples_threshold, int):
-            return self._n_samples_threshold
-        elif isinstance(self._n_samples_threshold, str):
-            if self._n_samples_threshold == "batch_size":
-                return self.batch_size
-            else:
-                raise ValueError('n_samples_threshold must be an int or "batch_size"')
-        else:
-            raise ValueError('n_samples_threshold must be an int or "batch_size"')
 
     @property
     def random_state(self):
@@ -118,15 +90,21 @@ class BaseCoHiRF:
                 raise ValueError(f"sampling_method {self.transform_method} is not valid.")
         elif isinstance(self.transform_method, type) and issubclass(self.transform_method, TransformerMixin):
             # perform a transformation
-            transformer = self.transform_method(**self.transform_kwargs)
+            transform_kwargs = self.transform_kwargs.copy()
+            if issubclass(self.transform_method, PCA):
+                n_components = self.transform_kwargs.get("n_components", None)
+                if n_components is not None:
+                    n_components = min(n_components, X.shape[0])  # PCA n_components must be <= n_samples
+                    transform_kwargs["n_components"] = n_components
+            transformer = self.transform_method(**transform_kwargs)
             if hasattr(transformer, "random_state"):
                 try:
-                    transformer.set_params(random_state=child_random_state.integers(0, 1e6))  # type: ignore
+                    transformer.set_params(random_state=child_random_state.integers(0, 1e6)) # type: ignore
                 except AttributeError:
                     setattr(transformer, "random_state", child_random_state.integers(0, 1e6))
             elif hasattr(transformer, "random_seed"):
                 try:
-                    transformer.set_params(random_seed=child_random_state.integers(0, 1e6))  # type: ignore
+                    transformer.set_params(random_seed=child_random_state.integers(0, 1e6)) # type: ignore
                 except AttributeError:
                     setattr(transformer, "random_seed", child_random_state.integers(0, 1e6))
             X_p = transformer.fit_transform(X)
@@ -200,7 +178,7 @@ class BaseCoHiRF:
         _, codes = np.unique(labels_i, axis=0, return_inverse=True)
         return codes
 
-    def compute_similarities(self, X_cluster, use_dask):
+    def compute_similarities(self, X_cluster: np.ndarray):
         if self.verbose:
             print("Computing similarities with method", self.representative_method)
 
@@ -228,45 +206,25 @@ class BaseCoHiRF:
 
         elif self.representative_method == "rbf":
             # replace cosine_distance by rbf_kernel
-            if use_dask:
-                cluster_similarities = dask_rbf_kernel(X_cluster)
-            else:
-                cluster_similarities = rbf_kernel(X_cluster)
+            cluster_similarities = rbf_kernel(X_cluster) 
 
         elif self.representative_method == "rbf_median":
             # replace cosine_distance by rbf_kernel with gamma = median
-            if use_dask:
-                cluster_distances = dask_euclidean_distances(X_cluster)
-                median_distance = da.median(cluster_distances)  # type: ignore
-                gamma = 1 / (2 * median_distance)
-                cluster_similarities = da.exp(-gamma * cluster_distances)  # type: ignore
-            else:
-                cluster_distances = euclidean_distances(X_cluster)
-                median_distance = np.median(cluster_distances)
-                gamma = 1 / (2 * median_distance)
-                cluster_similarities = np.exp(-gamma * cluster_distances)
+            cluster_distances = euclidean_distances(X_cluster) 
+            median_distance = np.median(cluster_distances)
+            gamma = 1 / (2 * median_distance)
+            cluster_similarities = np.exp(-gamma * cluster_distances)
 
         elif self.representative_method == "laplacian":
             # replace cosine_distance by laplacian_kernel
-            if use_dask:
-                cluster_similarities = dask_pairwise_distances(X_cluster, X_cluster, metric="manhattan")  # type: ignore
-                gamma = 1 / (X_cluster.shape[0])  # default sklearn gamma
-                cluster_similarities = da.exp(-gamma * cluster_similarities)  # type: ignore
-            else:
-                cluster_similarities = laplacian_kernel(X_cluster)
+            cluster_similarities = laplacian_kernel(X_cluster)
 
         elif self.representative_method == "laplacian_median":
             # replace cosine_distance by laplacian_kernel with gamma = median
-            if use_dask:
-                cluster_distances = dask_pairwise_distances(X_cluster, X_cluster, metric="manhattan")  # type: ignore
-                median_distance = da.median(cluster_distances)  # type: ignore
-                gamma = 1 / (2 * median_distance)
-                cluster_similarities = da.exp(-gamma * cluster_distances)  # type: ignore
-            else:
-                cluster_distances = manhattan_distances(X_cluster)
-                median_distance = np.median(cluster_distances)
-                gamma = 1 / (2 * median_distance)
-                cluster_similarities = np.exp(-gamma * cluster_distances)
+            cluster_distances = manhattan_distances(X_cluster) 
+            median_distance = np.median(cluster_distances)
+            gamma = 1 / (2 * median_distance)
+            cluster_similarities = np.exp(-gamma * cluster_distances)
         else:
             raise ValueError(
                 "representative_method must be closest_overall, closest_to_centroid,"
@@ -277,38 +235,89 @@ class BaseCoHiRF:
     def choose_new_representatives(
         self,
         X_representatives,
-        old_representatives_indexes,
         new_representative_cluster_assignments,
         new_clusters_labels,
-        use_dask,
     ):
-        new_representatives_indexes = []
+        new_representatives_local_indexes = []
         for label in new_clusters_labels:
             if self.verbose:
                 print("Choosing new representative sample for cluster", label)
             cluster_mask = new_representative_cluster_assignments == label
             X_cluster = X_representatives[cluster_mask]
-            X_cluster_indexes = old_representatives_indexes[cluster_mask]
+            X_cluster_indexes = np.where(cluster_mask)[0]
+
             # sample a representative sample from the cluster
             if self.n_samples_representative is not None:
                 n_samples_representative = min(self.n_samples_representative, X_cluster.shape[0])
-                sampled_idx = self.random_state.choice(X_cluster.shape[0], size=n_samples_representative, replace=False)
-                X_cluster = X_cluster[sampled_idx]
-                X_cluster_indexes = X_cluster_indexes[sampled_idx]
-            cluster_similarities = self.compute_similarities(X_cluster, use_dask)
-            cluster_similarities_sum = cluster_similarities.sum(axis=0)
-            most_similar_sample_idx = X_cluster_indexes[np.argmax(cluster_similarities_sum)]
-            new_representatives_indexes.append(most_similar_sample_idx)
-        return np.array(new_representatives_indexes)
+                sampled_indexes = self.random_state.choice(X_cluster.shape[0], size=n_samples_representative, replace=False)
+                X_cluster = X_cluster[sampled_indexes]
+                X_cluster_indexes = X_cluster_indexes[sampled_indexes]
 
-    def get_new_clusters(self, old_clusters, new_representative_cluster_assignments, new_n_clusters):
-        new_clusters = [[] for _ in range(new_n_clusters)]
+            cluster_similarities = self.compute_similarities(X_cluster)
+            cluster_similarities_sum = cluster_similarities.sum(axis=0)
+            most_similar_sample_local_idx = X_cluster_indexes[cluster_similarities_sum.argmax()]
+            new_representatives_local_indexes.append(most_similar_sample_local_idx)
+        new_representatives_local_indexes = np.array(new_representatives_local_indexes)
+        return new_representatives_local_indexes
+
+    def update_clusters(self, old_clusters, new_representative_cluster_assignments, new_clusters_labels):
         if self.verbose:
             print("Getting new clusters")
-        for i, cluster in enumerate(old_clusters):
-            cluster_assignment = new_representative_cluster_assignments[i]
-            new_clusters[cluster_assignment].extend(cluster)
+        new_n_clusters = len(new_clusters_labels)
+        new_clusters = [[] for _ in range(new_n_clusters)]
+        # if old_clusters is empty, it is the first iteration and we can directly use
+        # new_representative_cluster_assignments and iterate through the new clusters
+        if not old_clusters:  
+            for i in range(new_n_clusters):
+                cluster_assignment = np.where(new_representative_cluster_assignments == i)[0]
+                new_clusters[i].extend(cluster_assignment)
+        # else we have to iterate through the old clusters and assign them to the new clusters
+        else:
+            for i, cluster in enumerate(old_clusters):
+                cluster_assignment = new_representative_cluster_assignments[i]
+                new_clusters[cluster_assignment].extend(cluster)
         return new_clusters
+
+    def update_parents(
+        self,
+        old_parents,
+        old_representatives_absolute_indexes,
+        new_clusters_labels,
+        new_representative_cluster_assignments,
+        new_representatives_absolute_indexes,
+    ):
+        if self.verbose:
+            print("Updating parents")
+        new_parents = old_parents.copy()
+        for new_representative_index, new_cluster_label in zip(
+            new_representatives_absolute_indexes, new_clusters_labels
+        ):
+            parents_indexes_to_update = old_representatives_absolute_indexes[
+                new_representative_cluster_assignments == new_cluster_label
+            ]
+            new_parents[parents_indexes_to_update] = new_representative_index
+        return new_parents
+
+    def get_all_parents_indexes(self, parents, representative_index):
+        all_indexes = set()
+        indexes_to_append = [representative_index]
+        first = True
+        while len(indexes_to_append) > 0:  # the representative_index itself will always be in the list
+            all_indexes.update(indexes_to_append)
+            indexes_to_append = np.where(np.isin(parents, indexes_to_append))[0]
+            if first:
+                first = False
+                indexes_to_append = np.setdiff1d(indexes_to_append, representative_index, assume_unique=True)
+        return list(all_indexes)
+
+    def get_labels_from_parents(self, parents, representative_indexes):
+        if self.verbose:
+            print("Getting labels from parents")
+        labels = np.empty(parents.shape[0], dtype=int)
+        for i, representative_index in enumerate(representative_indexes):
+            all_indexes = self.get_all_parents_indexes(parents, representative_index)
+            labels[all_indexes] = i
+        return labels
 
     def get_labels_from_clusters(self, clusters):
         if self.verbose:
@@ -320,7 +329,7 @@ class BaseCoHiRF:
         labels[cluster_indexes] = cluster_labels
         return labels
 
-    def fit(self, X, y=None, sample_weight=None):
+    def fit(self, X: pd.DataFrame | np.ndarray, y=None, sample_weight=None):
         if self.verbose:
             print("Starting fit")
         n_samples = X.shape[0]
@@ -328,123 +337,78 @@ class BaseCoHiRF:
         # we will work with numpy (arrays) for speed
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
-        elif isinstance(X, dd.DataFrame):
-            X = X.to_dask_array(lengths=True)
-
-        if self.use_dask == True:
-            if not isinstance(X, DaskArray):
-                X = da.from_array(X, chunks=(self.batch_size, -1))  # type: ignore
-            use_dask = True
-        elif self.use_dask == False:
-            if isinstance(X, DaskArray):
-                X = X.compute()
-            use_dask = False
-        elif self.use_dask == "auto":
-            # we use whatever is passed
-            if isinstance(X, DaskArray):
-                use_dask = True
-            else:
-                use_dask = False
-        else:
-            raise ValueError('use_dask must be True, False or "auto"')
-
-        # representative samples
-        X_representatives = X
 
         # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
         # n_samples as representatives
-        representatives_indexes = np.arange(n_samples)
-        # each sample starts as its own cluster
-        representative_cluster_assignments = representatives_indexes
-        clusters_labels = representatives_indexes
-
-        # list of lists of indexes of the samples of each cluster
-        # clusters = [[[i] for i in range(n_samples)]]
-        clusters = []  # optimization for first iteration, we dont need to iterate through all the samples
+        representatives_absolute_indexes = np.arange(n_samples)
+        # representatives_local_indexes = representatives_absolute_indexes
+        # each sample starts as its own cluster (and its own parent)
+        representatives_cluster_assignments = representatives_absolute_indexes
+        representatives_clusters_labels = representatives_absolute_indexes
+        if self.hierarchy_strategy == "parents":
+            parents = representatives_absolute_indexes
+            clusters = None
+        elif self.hierarchy_strategy == "clusters":
+            parents = None
+            # list of lists of indexes of the samples of each cluster
+            # we start with an empty list to avoid iterating through all samples like
+            # clusters = [[i] for i in range(n_samples)]
+            clusters = []
+        else:
+            raise ValueError("hierarchy_strategy must be 'parents' or 'clusters'")
 
         i = 0
         self.n_clusters_iter_ = []
         self.labels_iter_ = []
         # iterate until every sequence of labels is unique
-        while (len(representative_cluster_assignments) != len(clusters_labels) and i < self.max_iter) or i == 0:
+        while (
+            len(representatives_cluster_assignments) != len(representatives_clusters_labels) and i < self.max_iter
+        ) or i == 0:
             if self.verbose:
                 print("Iteration", i)
 
-            if self.batch_size is not None:
-                # sample a batch of samples
-                n_resample = min(self.batch_size, X.shape[0])
-                resampled_indexes = self.random_state.choice(X_representatives.shape[0], size=n_resample, replace=False)  # type: ignore
-                not_resampled_indexes = np.setdiff1d(np.arange(X_representatives.shape[0]), resampled_indexes)
-                X_representatives = X_representatives[resampled_indexes, :]  # type: ignore
-                if use_dask:
-                    X_representatives.persist()  # type: ignore
-                representatives_indexes = representatives_indexes[resampled_indexes]
-            else:
-                not_resampled_indexes = None
+            X_representatives = X[representatives_absolute_indexes]
 
-            # consensus assignment (it is here that we repeatdly apply our base model)
             if self.transform_once_per_iteration:
                 # we transform once the data here
                 X_representatives = self.sampling_transform_X(X_representatives, self.random_state)
-            new_representative_cluster_assignments = self.get_representative_cluster_assignments(X_representatives)
-            new_clusters_labels = np.unique(new_representative_cluster_assignments)
-            new_n_clusters = len(new_clusters_labels)
+
+            # consensus assignment (it is here that we repeatedly apply our base model)
+            representatives_cluster_assignments = self.get_representative_cluster_assignments(X_representatives)
+            representatives_clusters_labels = np.unique(representatives_cluster_assignments)
 
             # using representative_method
-            new_representatives_indexes = self.choose_new_representatives(
+            new_representatives_local_indexes = self.choose_new_representatives(
                 X_representatives,
-                representatives_indexes,
-                new_representative_cluster_assignments,
-                new_clusters_labels,
-                use_dask,
+                representatives_cluster_assignments,
+                representatives_clusters_labels,
             )
 
-            if not_resampled_indexes is not None:
-                # we consider the not resampled samples as invididual clusters
-                # we create the labels of the clusters
-                not_sampled_labels = np.arange(new_n_clusters, new_n_clusters + len(not_resampled_indexes))
-                # we update representative_cluster_assignments
-                new_representative_cluster_assignments = np.concatenate(
-                    (new_representative_cluster_assignments, not_sampled_labels)
+            if self.hierarchy_strategy == "parents":
+                parents = self.update_parents(
+                    parents,
+                    representatives_absolute_indexes,  # old_representatives_absolute_indexes
+                    representatives_clusters_labels,
+                    representatives_cluster_assignments,
+                    representatives_absolute_indexes[new_representatives_local_indexes],  # new_representatives_absolute_indexes
                 )
-                new_clusters_labels = np.concatenate((new_clusters_labels, not_sampled_labels))
-                # we add the not resampled_indexes to the new_representatives_indexes
-                new_representatives_indexes = np.concatenate((new_representatives_indexes, not_resampled_indexes))
-                # we update the number of clusters
-                new_n_clusters += len(not_resampled_indexes)
+            elif self.hierarchy_strategy == "clusters":
+                clusters = self.update_clusters(
+                    clusters, representatives_cluster_assignments, representatives_clusters_labels
+                )
 
-            self.n_clusters_iter_.append(new_n_clusters)
+            representatives_absolute_indexes = representatives_absolute_indexes[new_representatives_local_indexes]
 
-            if i == 0:
-                # small optimization for first iteration: we dont need to iterate through all the clusters (samples)
-                # we can just use the new representative cluster assignments
-                new_clusters = [[] for _ in range(new_n_clusters)]
-                for j in range(new_n_clusters):
-                    representative_cluster_assignments = np.where(new_representative_cluster_assignments == j)[0]
-                    new_clusters[j] = representative_cluster_assignments  # type: ignore
-            else:
-                # we need to iterate through all the (old) clusters
-                new_clusters = self.get_new_clusters(clusters, new_representative_cluster_assignments, new_n_clusters)
-
-            if self.save_path:
-                labels = self.get_labels_from_clusters(new_clusters)
-                self.labels_iter_.append(labels)
-
-            # update variables
-            clusters = new_clusters
-            representatives_indexes = new_representatives_indexes
-            representative_cluster_assignments = new_representative_cluster_assignments
-            clusters_labels = new_clusters_labels
-            X_representatives = X[representatives_indexes, :]  # type: ignore
-            if isinstance(X_representatives, da.Array) and X_representatives.shape[0] <= self.n_samples_threshold:  # type: ignore
-                X_representatives = X_representatives.compute()
-                use_dask = False
             i += 1
 
-        self.n_clusters_ = len(clusters)
-        self.labels_ = self.get_labels_from_clusters(clusters)
-        self.cluster_representatives_ = X_representatives
-        self.cluster_representatives_labels_ = representative_cluster_assignments
+        self.n_clusters_ = len(representatives_clusters_labels)
+        if self.hierarchy_strategy == "parents":
+            self.labels_ = self.get_labels_from_parents(parents, representatives_absolute_indexes)
+        elif self.hierarchy_strategy == "clusters":
+            self.labels_ = self.get_labels_from_clusters(clusters)
+        self.parents_ = parents
+        self.representatives_indexes_ = representatives_absolute_indexes
+        self.cluster_representatives_ = X[representatives_absolute_indexes] 
         self.n_iter_ = i
         return self
 
@@ -455,11 +419,11 @@ class BaseCoHiRF:
         # find from each cluster representative each sample is closest to
         cluster_representatives_ = getattr(self, "cluster_representatives_", None)
         if cluster_representatives_ is None:
-            raise ValueError("You need to fit the model before predicting.")
+            raise ValueError("The model has not been fitted yet. Please call fit() before predict().")
         else:
             distances = cosine_distances(X, np.asarray(self.cluster_representatives_))
             labels = np.argmin(distances, axis=1)
-            labels = self.cluster_representatives_labels_[labels]
+            labels = self.labels_[labels]
         return labels
 
 
@@ -474,6 +438,7 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         n_jobs: int = 1,
         max_iter: int = 100,
         save_path: bool = False,
+        hierarchy_strategy: Literal['parents', 'clusters'] = "parents",
         # base model parameters
         base_model: str | type[BaseEstimator] = "kmeans",
         base_model_kwargs: Optional[dict] = None,
@@ -483,10 +448,6 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
         transform_once_per_iteration: bool = False,
-        # batch parameters
-        batch_size: Optional[int] = None,
-        n_samples_threshold: int | str = "batch_size",
-        use_dask: bool | str = "auto",
     ):
         super().__init__(
             repetitions,
@@ -497,21 +458,18 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
             n_jobs,
             max_iter,
             save_path,
+            hierarchy_strategy,
             base_model=base_model,
             base_model_kwargs=base_model_kwargs,
             transform_method=transform_method,
             n_features=n_features,
             transform_kwargs=transform_kwargs,
-            batch_size=batch_size,
-            n_samples_threshold=n_samples_threshold,
-            use_dask=use_dask,
             sample_than_transform=sample_than_transform,
             transform_once_per_iteration=transform_once_per_iteration,
         )
 
 
 class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
-
     def __init__(
         self,
         repetitions: int = 10,
@@ -522,6 +480,7 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         n_jobs: int = 1,
         max_iter: int = 100,
         save_path: bool = False,
+        hierarchy_strategy: Literal['parents', 'clusters'] = "parents",
         # base model parameters
         base_model: str | type[BaseEstimator] = "kmeans",
         base_model_kwargs: Optional[dict] = None,
@@ -531,14 +490,10 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
         transform_once_per_iteration: bool = False,
-        # batch parameters
-        batch_size: Optional[int] = None,
-        n_samples_threshold: int | str = "batch_size",
-        use_dask: bool | str = "auto",
         # kmeans parameters
         kmeans_n_clusters: int = 3,
         kmeans_init: str = "k-means++",
-        kmeans_n_init: str | int = "auto",
+        kmeans_n_init: str | int = 'auto',
         kmeans_max_iter: int = 300,
         kmeans_tol: float = 1e-4,
     ):
@@ -551,14 +506,12 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
             n_jobs,
             max_iter,
             save_path,
+            hierarchy_strategy,
             base_model=base_model,
             base_model_kwargs=base_model_kwargs,
             transform_method=transform_method,
             n_features=n_features,
             transform_kwargs=transform_kwargs,
-            batch_size=batch_size,
-            n_samples_threshold=n_samples_threshold,
-            use_dask=use_dask,
             sample_than_transform=sample_than_transform,
             transform_once_per_iteration=transform_once_per_iteration,
         )
@@ -569,6 +522,7 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         self.kmeans_tol = kmeans_tol
 
     def get_base_model(self, child_random_state):
+        random_seed = child_random_state.integers(0, 1e6)
         if self.base_model == "kmeans":
             return KMeans(
                 n_clusters=self.kmeans_n_clusters,
@@ -577,7 +531,7 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
                 max_iter=self.kmeans_max_iter,
                 tol=self.kmeans_tol,
                 verbose=self.verbose,
-                random_state=child_random_state,
+                random_state=random_seed,
             )
         else:
             raise ValueError(f"base_model {self.base_model} is not valid.")
