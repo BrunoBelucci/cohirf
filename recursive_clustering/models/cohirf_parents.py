@@ -11,7 +11,7 @@ from sklearn.metrics.pairwise import (
     euclidean_distances,
     manhattan_distances,
 )
-from sklearn.kernel_approximation import RBFSampler, Nystroem
+from sklearn.decomposition import PCA
 import dask.array as da
 import dask.dataframe as dd
 from dask_ml.metrics.pairwise import (
@@ -22,7 +22,6 @@ from dask_ml.metrics.pairwise import (
 from joblib import Parallel, delayed
 import optuna
 import pandas as pd
-from recursive_clustering.models.kernel_kmeans import KernelKMeans
 
 
 class BaseCoHiRF:
@@ -118,7 +117,13 @@ class BaseCoHiRF:
                 raise ValueError(f"sampling_method {self.transform_method} is not valid.")
         elif isinstance(self.transform_method, type) and issubclass(self.transform_method, TransformerMixin):
             # perform a transformation
-            transformer = self.transform_method(**self.transform_kwargs)
+            transform_kwargs = self.transform_kwargs.copy()
+            if issubclass(self.transform_method, PCA):
+                n_components = self.transform_kwargs.get("n_components", None)
+                if n_components is not None:
+                    n_components = min(n_components, X.shape[0])  # PCA n_components must be <= n_samples
+                    transform_kwargs["n_components"] = n_components
+            transformer = self.transform_method(**transform_kwargs)
             if hasattr(transformer, "random_state"):
                 try:
                     transformer.set_params(random_state=child_random_state.integers(0, 1e6)) # type: ignore
