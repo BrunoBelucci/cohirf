@@ -11,14 +11,14 @@ class GaussianClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
             *args,
-            n_samples: Optional[int | list[int]] = 100,
-            n_features: Optional[int | list[int]] = 10,
-            n_random_features: Optional[int | list[int]] = None,
+            n_samples: int | list[int] = 100,
+            n_features: int | list[int] = 10,
+            n_random_features: Optional[int | list[int] | list[None]] = None,
             n_informative_features: Optional[int | list[int]] = None,
             pct_random_features: Optional[float | list[float]] = None,
-            n_centers: Optional[int] = 3,
-            distances: Optional[float] = 1.0,
-            seeds_dataset: Optional[int | list[int]] = 0,
+            n_centers: int | list[int] = 3,
+            distances: float | list[float] = 1.0,
+            seeds_dataset: int | list[int] = 0,
             seeds_unified: Optional[int | list[int]] = None,
             **kwargs
     ):
@@ -30,13 +30,13 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             n_features = [n_features]
         self.n_features = n_features
         if isinstance(n_random_features, int) or n_random_features is None:
-            n_random_features = [n_random_features]
+            n_random_features = [n_random_features] # type: ignore
         self.n_random_features = n_random_features
         if isinstance(n_informative_features, int) or n_informative_features is None:
-            n_informative_features = [n_informative_features]
+            n_informative_features = [n_informative_features]  # type: ignore
         self.n_informative_features = n_informative_features
         if isinstance(pct_random_features, float) or isinstance(pct_random_features, int) or pct_random_features is None:
-            pct_random_features = [pct_random_features]
+            pct_random_features = [pct_random_features]  # type: ignore
         self.pct_random_features = pct_random_features
         if isinstance(n_centers, int):
             n_centers = [n_centers]
@@ -48,7 +48,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             seeds_dataset = [seeds_dataset]
         self.seeds_dataset = seeds_dataset
         if isinstance(seeds_unified, int) or seeds_unified is None:
-            seeds_unified = [seeds_unified]
+            seeds_unified = [seeds_unified]  # type: ignore
         self.seeds_unified = seeds_unified
 
     def _add_arguments_to_parser(self):
@@ -80,6 +80,16 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'seed_unified', 'n_samples', 'n_features',
                              'n_centers', 'distance', 'n_random_features', 'pct_random_features', 'n_informative_features']
         if self.combinations is None:
+            if not isinstance(self.seeds_unified, list):
+                raise ValueError('seeds_unified must be a list')
+            if not isinstance(self.distances, list):
+                raise ValueError('distances must be a list')
+            if not isinstance(self.n_random_features, list):
+                raise ValueError('n_random_features must be a list')
+            if not isinstance(self.pct_random_features, list):
+                raise ValueError('pct_random_features must be a list')
+            if not isinstance(self.n_informative_features, list):
+                raise ValueError('n_informative_features must be a list')
             combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.seeds_unified,
                                         self.n_samples, self.n_features, self.n_centers, self.distances,
                                         self.n_random_features, self.pct_random_features, self.n_informative_features))
@@ -98,8 +108,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
                             timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         n_samples = combination['n_samples']
         n_features = combination['n_features']
         n_centers = combination['n_centers']

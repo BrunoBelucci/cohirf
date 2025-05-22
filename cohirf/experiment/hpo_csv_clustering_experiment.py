@@ -5,12 +5,10 @@ from cohirf.experiment.csv_clustering_experiment import CSVClusteringExperiment
 
 
 class HPOCSVClusteringExperiment(HPOExperiment, CSVClusteringExperiment):
-    def get_hyperband_max_resources(self, combination: dict, unique_params: Optional[dict] = None,
-                                    extra_params: Optional[dict] = None, **kwargs):
+    def get_hyperband_max_resources(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         raise NotImplementedError('Hyperband is not available for this experiment')
 
-    def _load_single_experiment(self, combination: dict, unique_params: Optional[dict] = None,
-                                extra_params: Optional[dict] = None, **kwargs):
+    def _load_single_experiment(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         openml_clustering_experiment = CSVClusteringExperiment(
             # experiment parameters
             experiment_name=self.experiment_name, create_validation_set=self.create_validation_set,
@@ -21,8 +19,7 @@ class HPOCSVClusteringExperiment(HPOExperiment, CSVClusteringExperiment):
         )
         return openml_clustering_experiment
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         dataset_name = combination['dataset_name']
         return {
             'dataset_name': dataset_name
@@ -33,4 +30,3 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     experiment = HPOCSVClusteringExperiment(parser=parser)
     experiment.run()
-    

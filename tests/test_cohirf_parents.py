@@ -39,7 +39,7 @@ def test_fit_predict_hierarchy_strategies():
 
 def test_cohirf_blobs_high_ari():
     # Generate easy blobs
-    X, y_true = make_blobs(n_samples=100, n_features=3, centers=3, random_state=42, return_centers=False)
+    X, y_true = make_blobs(n_samples=100, n_features=3, centers=3, random_state=42, return_centers=False)  # type: ignore
     model = CoHiRF(
         repetitions=3,
         random_state=42,

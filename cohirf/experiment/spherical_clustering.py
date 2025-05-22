@@ -58,7 +58,4 @@ def visualize_3d_data(data, labels):
 
     # Scatter plot with colors based on labels
     scatter = ax.scatter(data[:, 0], data[:, 1], data[:, 2], c=labels, s=2, cmap="viridis")
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
     plt.show()

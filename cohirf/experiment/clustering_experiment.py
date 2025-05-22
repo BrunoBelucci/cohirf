@@ -77,8 +77,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
     def models_dict(self):
         return models_dict.copy()
 
-    def _load_model(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                    **kwargs):
+    def _load_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         model_nickname = combination['model_nickname']
         seed_model = combination['seed_model']
         model_params = combination['model_params']
@@ -97,8 +96,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'model': model,
         }
 
-    def _get_metrics(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                     **kwargs):
+    def _get_metrics(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         scores = {
             'rand_score': rand_score,
             'adjusted_rand': adjusted_rand_score,
@@ -113,15 +111,13 @@ class ClusteringExperiment(BaseExperiment, ABC):
         }
         return scores
 
-    def _fit_model(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _fit_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         model = kwargs['load_model_return']['model']
         X = kwargs['load_data_return']['X']
         y_pred = model.fit_predict(X)
         return {'y_pred': y_pred}
 
-    def _evaluate_model(self, combination: dict, unique_params: Optional[dict] = None,
-                        extra_params: Optional[dict] = None, **kwargs):
+    def _evaluate_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         scores = kwargs['get_metrics_return']
         X = kwargs['load_data_return']['X']
         y_true = kwargs['load_data_return']['y']
@@ -130,36 +126,36 @@ class ClusteringExperiment(BaseExperiment, ABC):
         for score_name, score_fn in scores.items():
             if callable(score_fn):
                 if score_name == 'homogeneity_completeness_v_measure':
-                    homogeneity, completeness, v_measure = score_fn(y_true, y_pred)
+                    homogeneity, completeness, v_measure = score_fn(y_true, y_pred) # type: ignore
                     results['homogeneity'] = homogeneity
                     results['completeness'] = completeness
                     results['v_measure'] = v_measure
                 elif score_name == 'silhouette':
                     try:
-                        results['silhouette'] = score_fn(X, y_pred)
+                        results['silhouette'] = score_fn(X, y_pred) # type: ignore
                     except ValueError:
                         results['silhouette'] = -1
                 elif score_name == 'calinski_harabasz_score':
                     try:
-                        results['calinski_harabasz_score'] = score_fn(X, y_pred)
+                        results['calinski_harabasz_score'] = score_fn(X, y_pred) # type: ignore
                     except ValueError:
                         results['calinski_harabasz_score'] = -1
                 elif score_name == 'davies_bouldin_score':
                     try:
-                        results['davies_bouldin_score'] = score_fn(X, y_pred)
+                        results['davies_bouldin_score'] = score_fn(X, y_pred) # type: ignore
                     except ValueError:
-                        results['davies_bouldin_score'] = 1e3
+                        results['davies_bouldin_score'] = 1e3 # type: ignore
                 elif score_name == 'inertia_score':
                     try:
-                        results['inertia_score'] = score_fn(X, y_pred)
+                        results['inertia_score'] = score_fn(X, y_pred) # type: ignore
                     except ValueError:
                         results['inertia_score'] = -1
                 else:
-                    results[score_name] = score_fn(y_true, y_pred)
+                    results[score_name] = score_fn(y_true, y_pred) # type: ignore
         return results
 
-    def _log_run_results(self, combination: dict, unique_params: Optional[dict] = None,
-                         extra_params: Optional[dict] = None, mlflow_run_id=None, **kwargs):
+    def _log_run_results(self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id=None, 
+                         **kwargs):
         if mlflow_run_id is None:
             return
 
@@ -191,8 +187,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         mlflow.log_params(log_params, run_id=mlflow_run_id)
         mlflow.log_metrics(log_metrics, run_id=mlflow_run_id)
 
-    def _on_exception_or_train_end(self, combination: dict, unique_params: Optional[dict] = None,
-                                   extra_params: Optional[dict] = None, **kwargs):
+    def _on_exception_or_train_end(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         result = super()._on_exception_or_train_end(combination=combination, unique_params=unique_params,
                                                     extra_params=extra_params, **kwargs)
         dataset_name = kwargs.get('load_data_return', {}).get('dataset_name', None)

@@ -34,33 +34,41 @@ class PseudoKernelClustering:
         if isinstance(self.base_model, str):
             if self.base_model == 'kmeans':
                 model = KMeans(**self.base_model_kwargs)
+            else:
+                raise ValueError("base_model must be 'kmeans' or a subclass of BaseEstimator")
         elif isinstance(self.base_model, type) and issubclass(self.base_model, BaseEstimator):
             model = self.base_model(**self.base_model_kwargs)
         else:
             raise ValueError("base_model must be a string or a subclass of BaseEstimator")
         return model
-    
+
     def get_transformer_instance(self):
         if isinstance(self.transform_method, str):
             if self.transform_method == 'kpca':
-                
                 transformer = KernelPCA(**self.transform_kwargs)
+            else:
+                raise ValueError("transform_method must be 'kpca' or a subclass of TransformerMixin")
         elif isinstance(self.transform_method, type) and issubclass(self.transform_method, TransformerMixin):
             transformer = self.transform_method(**self.transform_kwargs)
         else:
             raise ValueError("sampling_method must be a string or a subclass of TransformerMixin")
         return transformer
-            
 
     def fit(self, X, y=None):
         transformer = self.get_transformer_instance()
         X_transformed = transformer.fit_transform(X)
         self.base_model_instance = self.get_model_instance()
-        self.base_model_instance.fit(X_transformed, y)
+        try:
+            self.base_model_instance.fit(X_transformed, y)  # type: ignore
+        except AttributeError:
+            raise ValueError("The base model must implement the fit method.")
         return self
-    
+
     def fit_predict(self, X, y=None):
         transformer = self.get_transformer_instance()
         X_transformed = transformer.fit_transform(X)
         self.base_model_instance = self.get_model_instance()
-        return self.base_model_instance.fit_predict(X_transformed, y)
+        try:
+            return self.base_model_instance.fit_predict(X_transformed, y)  # type: ignore
+        except AttributeError:
+            raise ValueError("The base model must implement the fit_predict method.")

@@ -26,8 +26,7 @@ class CSVClusteringExperiment(ClusteringExperiment):
         self.datasets_names = args.datasets_names
         return args
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         csv_data = pd.read_csv('csv_data.csv', sep=';',
                                dtype={'dataset_name': str, 'X_path': str, 'y_path': str, 'cat_features': str})
         dataset_name = combination['dataset_name']
@@ -96,6 +95,8 @@ class CSVClusteringExperiment(ClusteringExperiment):
         }
 
     def _get_combinations(self):
+        if self.datasets_names is None:
+            raise ValueError('datasets_names must be specified')
         combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_names))
         combination_names = ['model_nickname', 'seed_model', 'dataset_name']
         combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]

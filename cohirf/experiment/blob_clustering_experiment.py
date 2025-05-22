@@ -15,13 +15,13 @@ class BlobClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
             *args,
-            n_samples: Optional[int | list[int]] = 100,
-            n_features: Optional[int | list[int]] = 2,
-            centers: Optional[int] = 3,
-            cluster_std: Optional[float] = 1.0,
-            center_box: Optional[tuple[float, float]] = (-10.0, 10.0),
-            shuffle: Optional[bool] = True,
-            seeds_dataset: Optional[int | list[int]] = 0,
+            n_samples: int | list[int] = 100,
+            n_features: int | list[int] = 2,
+            centers: int = 3,
+            cluster_std: float = 1.0,
+            center_box: tuple[float, float] = (-10.0, 10.0),
+            shuffle: bool = True,
+            seeds_dataset: int | list[int] = 0,
             **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -81,8 +81,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
                             timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         n_samples = combination['n_samples']
         n_features = combination['n_features']
         centers = unique_params['centers']
@@ -99,7 +98,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
             X = np.load(X_file)
             y = np.load(y_file)
         else:
-            X, y = make_blobs(n_samples=n_samples, n_features=n_features, centers=centers, cluster_std=cluster_std,
+            X, y = make_blobs(n_samples=n_samples, n_features=n_features, centers=centers, cluster_std=cluster_std, # type: ignore
                               center_box=center_box, shuffle=shuffle, random_state=seed_dataset)
             # save on work_dir for later use
             os.makedirs(dataset_dir, exist_ok=True)

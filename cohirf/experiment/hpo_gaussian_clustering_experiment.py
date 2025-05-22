@@ -5,12 +5,10 @@ from cohirf.experiment.gaussian_clustering_experiment import GaussianClusteringE
 
 
 class HPOGaussianClusteringExperiment(HPOExperiment, GaussianClusteringExperiment):
-    def get_hyperband_max_resources(self, combination: dict, unique_params: Optional[dict] = None,
-                                    extra_params: Optional[dict] = None, **kwargs):
+    def get_hyperband_max_resources(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         raise NotImplementedError('Hyperband is not available for this experiment')
 
-    def _load_single_experiment(self, combination: dict, unique_params: Optional[dict] = None,
-                                extra_params: Optional[dict] = None, **kwargs):
+    def _load_single_experiment(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         blob_clustering_experiment = GaussianClusteringExperiment(
             n_samples=self.n_samples, n_features=self.n_features, n_centers=self.n_centers, distances=self.distances,
             # experiment parameters
@@ -22,8 +20,7 @@ class HPOGaussianClusteringExperiment(HPOExperiment, GaussianClusteringExperimen
         )
         return blob_clustering_experiment
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         # load the data and save it to disk, but do not return it here
         load_data_return = super()._load_data(combination=combination, unique_params=unique_params,
                                               extra_params=extra_params, **kwargs)

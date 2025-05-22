@@ -15,25 +15,25 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
             *args,
-            n_samples: Optional[int | list[int]] = 100,
-            n_random: Optional[int | list[int]] = None,
-            n_informative: Optional[int | list[int]] = None,
-            n_redundant: Optional[int] = 0,
-            n_repeated: Optional[int] = 0,
-            n_classes: Optional[int | list[int]] = 2,
-            n_clusters_per_class: Optional[int] = 1,
+            n_samples: int | list[int] = 100,
+            n_random: int | list[int] = 0,
+            n_informative: int | list[int] = 10,
+            n_redundant: int = 0,
+            n_repeated: int = 0,
+            n_classes: int | list[int] = 2,
+            n_clusters_per_class: int = 1,
             weights: Optional[list] = None,
-            flip_y: Optional[float] = 0.0,
-            class_sep: Optional[int | list[int]] = 1.0,
-            hypercube: Optional[bool] = True,
-            shift: Optional[float] = 0.0,
-            scale: Optional[float] = 1.0,
-            shuffle: Optional[bool] = True,
-            seeds_dataset: Optional[int | list[int]] = 0,
+            flip_y: float = 0.0,
+            class_sep: float | list[float] = 1.0,
+            hypercube: bool = True,
+            shift: float = 0.0,
+            scale: float = 1.0,
+            shuffle: bool = True,
+            seeds_dataset: int | list[int] = 0,
             seeds_unified: Optional[int | list[int]] = None,
             n_features: Optional[int | list[int]] = None,
             pct_random: Optional[float | list[float]] = None,
-            add_outlier: Optional[bool] = False,
+            add_outlier: bool = False,
             **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -65,13 +65,13 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             seeds_dataset = [seeds_dataset]
         self.seeds_dataset = seeds_dataset
         if isinstance(seeds_unified, int) or seeds_unified is None:
-            seeds_unified = [seeds_unified]
+            seeds_unified = [seeds_unified] # type: ignore
         self.seeds_unified = seeds_unified
         if isinstance(n_features, int) or n_features is None:
-            n_features = [n_features]
+            n_features = [n_features]  # type: ignore
         self.n_features = n_features
         if isinstance(pct_random, float) or pct_random is None:
-            pct_random = [pct_random]
+            pct_random = [pct_random]  # type: ignore
         self.pct_random = pct_random
         self.add_outlier = add_outlier
 
@@ -124,6 +124,14 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'n_samples', 'n_random', 'n_informative',
                              'n_features', 'pct_random', 'class_sep', 'seed_unified', 'n_classes']
         if self.combinations is None:
+            if not isinstance(self.n_features, list):
+                raise ValueError('n_features must be a list')
+            if not isinstance(self.pct_random, list):
+                raise ValueError('pct_random must be a list')
+            if not isinstance(self.class_sep, list):
+                raise ValueError('class_sep must be a list')
+            if not isinstance(self.seeds_unified, list):
+                raise ValueError('seeds_unified must be a list')
             combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.n_samples,
                                         self.n_random, self.n_informative, self.n_features, self.pct_random,
                                         self.class_sep,
@@ -146,22 +154,19 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
                             timeout_fit=self.timeout_fit)
         return combinations, combination_names, unique_params, extra_params
 
-    def _before_load_model(self, combination: dict, unique_params: Optional[dict] = None,
-                           extra_params: Optional[dict] = None, **kwargs):
+    def _before_load_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         seed_unified = combination['seed_unified']
         seed_model = combination['seed_model']
         if seed_unified is not None:
             combination['seed_model'] = seed_unified
         return dict(seed_model=seed_model)
 
-    def _after_load_model(self, combination: dict, unique_params: Optional[dict] = None,
-                          extra_params: Optional[dict] = None, **kwargs):
+    def _after_load_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         seed_model = kwargs['before_load_model_return']['seed_model']
         combination['seed_model'] = seed_model
         return {}
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         n_samples = combination['n_samples']
         n_random = combination['n_random']
         n_classes = combination['n_classes']
@@ -275,8 +280,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             return self._train_model(combination=combination, unique_params=unique_params, extra_params=extra_params,
                                      return_results=return_results)
 
-    def _evaluate_model(self, combination: dict, unique_params: Optional[dict] = None,
-                        extra_params: Optional[dict] = None, **kwargs):
+    def _evaluate_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         results = super()._evaluate_model(combination=combination, unique_params=unique_params,
                                           extra_params=extra_params, **kwargs)
         add_outlier = unique_params['add_outlier']

@@ -1,10 +1,9 @@
 import argparse
-from itertools import product
 from typing import Optional
-
 import openml
 from ml_experiments.hpo_experiment import HPOExperiment
 from cohirf.experiment.open_ml_clustering_experiment import OpenmlClusteringExperiment
+import pandas as pd
 
 
 class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
@@ -24,8 +23,7 @@ class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
         )
         return openml_clustering_experiment
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         dataset_id = combination['dataset_id']
         task_id = combination['task_id']
         task_repeat = combination['task_repeat']
@@ -38,8 +36,10 @@ class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
             task = openml.tasks.get_task(task_id)
             split = task.get_train_test_split_indices(task_fold, task_repeat, task_sample)
             dataset = task.get_dataset()
-            X, y, cat_ind, att_names = dataset.get_data(target=task.target_name)
-            train_indices = split.train
+            X, y, cat_ind, att_names = dataset.get_data(target=task.target_name)  # type: ignore
+            train_indices = split.train  # type: ignore
+            if not isinstance(X, pd.DataFrame) or not isinstance(y, pd.Series):
+                raise ValueError("X and y must be pandas DataFrame and Series respectively")
             # we will use only the training data
             X = X.iloc[train_indices]
             y = y.iloc[train_indices]
@@ -47,6 +47,8 @@ class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
             dataset = openml.datasets.get_dataset(dataset_id)
             target = dataset.default_target_attribute
             X, y, cat_ind, att_names = dataset.get_data(target=target)
+            if not isinstance(X, pd.DataFrame) or not isinstance(y, pd.Series):
+                raise ValueError("X and y must be pandas DataFrame and Series respectively")
         else:
             raise ValueError('You must specify either dataset_id or task_id')
         cat_features_names = [att_names[i] for i, value in enumerate(cat_ind) if value is True]
@@ -62,4 +64,3 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     experiment = HPOOpenmlClusteringExperiment(parser=parser)
     experiment.run()
-    

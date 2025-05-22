@@ -17,14 +17,14 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             task_repeats: Optional[list[int]] = None,
             task_folds: Optional[list[int]] = None,
             task_samples: Optional[list[int]] = None,
-            standardize: Optional[bool] = False,
+            standardize: bool = False,
             **kwargs
     ):
         super().__init__(**kwargs)
         if isinstance(datasets_ids, int) or datasets_ids is None:
-            datasets_ids = [datasets_ids]
+            datasets_ids = [datasets_ids]  # type: ignore
         if isinstance(task_ids, int) or task_ids is None:
-            task_ids = [task_ids]
+            task_ids = [task_ids]  # type: ignore
         self.datasets_ids = datasets_ids
         self.task_ids = task_ids
         self.task_repeats = task_repeats if task_repeats else [0]
@@ -51,8 +51,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         self.standardize = args.standardize
         return args
 
-    def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
-                   **kwargs):
+    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         dataset_id = combination['dataset_id']
         task_id = combination['task_id']
         task_repeat = combination['task_repeat']
@@ -65,15 +64,19 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             task = openml.tasks.get_task(task_id)
             split = task.get_train_test_split_indices(task_fold, task_repeat, task_sample)
             dataset = task.get_dataset()
-            X, y, cat_ind, att_names = dataset.get_data(target=task.target_name)
-            train_indices = split.train
+            X, y, cat_ind, att_names = dataset.get_data(target=task.target_name)  # type: ignore
+            train_indices = split.train  # type: ignore
             # we will use only the training data
+            if not isinstance(X, pd.DataFrame) or not isinstance(y, pd.Series):
+                raise ValueError('X and y must be pandas DataFrame and Series respectively')
             X = X.iloc[train_indices]
             y = y.iloc[train_indices]
         elif dataset_id is not None:
             dataset = openml.datasets.get_dataset(dataset_id)
             target = dataset.default_target_attribute
             X, y, cat_ind, att_names = dataset.get_data(target=target)
+            if not isinstance(X, pd.DataFrame) or not isinstance(y, pd.Series):
+                raise ValueError('X and y must be pandas DataFrame and Series respectively')
             if dataset_id == 46785:
                 X = X.drop('cell_type1', axis=1)
                 att_names = att_names[:-1]
@@ -138,6 +141,16 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         combination_names = ['model_nickname', 'seed_model', 'dataset_id', 'task_id', 'task_repeat', 'task_fold',
                              'task_sample']
         if self.combinations is None:
+            if not isinstance(self.datasets_ids, list):
+                raise ValueError('datasets_ids must be a list')
+            if not isinstance(self.task_ids, list):
+                raise ValueError('task_ids must be a list')
+            if not isinstance(self.task_repeats, list):
+                raise ValueError('task_repeats must be a list')
+            if not isinstance(self.task_folds, list):
+                raise ValueError('task_folds must be a list')
+            if not isinstance(self.task_samples, list):
+                raise ValueError('task_samples must be a list')
             combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_ids, self.task_ids,
                                         self.task_repeats, self.task_folds, self.task_samples))
         else:
