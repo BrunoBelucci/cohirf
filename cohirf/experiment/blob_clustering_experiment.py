@@ -8,7 +8,7 @@ import os
 from sklearn.datasets import make_blobs
 import numpy as np
 
-from recursive_clustering.experiment.open_ml_clustering_experiment import ClusteringExperiment
+from cohirf.experiment.open_ml_clustering_experiment import ClusteringExperiment
 
 
 class BlobClusteringExperiment(ClusteringExperiment):

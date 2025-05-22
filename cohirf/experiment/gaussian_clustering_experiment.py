@@ -4,7 +4,7 @@ from itertools import product
 from typing import Optional
 import os
 import numpy as np
-from recursive_clustering.experiment.open_ml_clustering_experiment import ClusteringExperiment
+from cohirf.experiment.open_ml_clustering_experiment import ClusteringExperiment
 
 
 class GaussianClusteringExperiment(ClusteringExperiment):

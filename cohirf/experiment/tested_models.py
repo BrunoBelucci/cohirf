@@ -1,12 +1,12 @@
-from recursive_clustering.models.cohirf import CoHiRF
-from recursive_clustering.models.clique import Clique
-from recursive_clustering.models.irfllrr import IRFLLRR
-from recursive_clustering.models.kmeansproj import KMeansProj
-from recursive_clustering.models.proclus import Proclus
-from recursive_clustering.models.scsrgf import SpectralSubspaceRandomization
-from recursive_clustering.models.sklearn import (KMeans, OPTICS, DBSCAN, AgglomerativeClustering, SpectralClustering,
+from cohirf.models.cohirf import CoHiRF
+from cohirf.models.clique import Clique
+from cohirf.models.irfllrr import IRFLLRR
+from cohirf.models.kmeansproj import KMeansProj
+from cohirf.models.proclus import Proclus
+from cohirf.models.scsrgf import SpectralSubspaceRandomization
+from cohirf.models.sklearn import (KMeans, OPTICS, DBSCAN, AgglomerativeClustering, SpectralClustering,
                                                  MeanShift, AffinityPropagation, HDBSCAN)
-from recursive_clustering.models.WBMS import WBMS
+from cohirf.models.WBMS import WBMS
 
 
 models_dict = {

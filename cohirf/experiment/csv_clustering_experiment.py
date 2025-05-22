@@ -5,7 +5,7 @@ import mlflow
 import numpy as np
 import pandas as pd
 
-from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
+from cohirf.experiment.clustering_experiment import ClusteringExperiment
 
 
 class CSVClusteringExperiment(ClusteringExperiment):

@@ -4,7 +4,7 @@ from typing import Optional
 
 import openml
 from ml_experiments.hpo_experiment import HPOExperiment
-from recursive_clustering.experiment.open_ml_clustering_experiment import OpenmlClusteringExperiment
+from cohirf.experiment.open_ml_clustering_experiment import OpenmlClusteringExperiment
 
 
 class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):

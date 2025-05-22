@@ -6,7 +6,7 @@ import mlflow
 import numpy as np
 import pandas as pd
 import openml
-from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
+from cohirf.experiment.clustering_experiment import ClusteringExperiment
 
 
 class OpenmlClusteringExperiment(ClusteringExperiment):

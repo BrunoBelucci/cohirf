@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from sklearn.datasets import make_blobs
 from sklearn.metrics import adjusted_rand_score
-from recursive_clustering.models.cohirf import CoHiRF
+from cohirf.models.cohirf import CoHiRF
 
 def test_fit_predict_hierarchy_strategies():
     # Create a simple synthetic dataset

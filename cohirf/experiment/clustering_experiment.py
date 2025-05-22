@@ -13,7 +13,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 
 
 from ml_experiments.base_experiment import BaseExperiment
-from recursive_clustering.experiment.tested_models import models_dict
+from cohirf.experiment.tested_models import models_dict
 
 
 def inertia_score(X, y):

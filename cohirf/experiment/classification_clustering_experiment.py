@@ -8,7 +8,7 @@ from typing import Optional
 from sklearn.datasets import make_classification
 import numpy as np
 
-from recursive_clustering.experiment.clustering_experiment import ClusteringExperiment
+from cohirf.experiment.clustering_experiment import ClusteringExperiment
 
 
 class ClassificationClusteringExperiment(ClusteringExperiment):

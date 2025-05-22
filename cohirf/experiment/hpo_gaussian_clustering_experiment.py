@@ -1,29 +1,36 @@
 import argparse
 from typing import Optional
 from ml_experiments.hpo_experiment import HPOExperiment
-from recursive_clustering.experiment.csv_clustering_experiment import CSVClusteringExperiment
+from cohirf.experiment.gaussian_clustering_experiment import GaussianClusteringExperiment
 
 
-class HPOCSVClusteringExperiment(HPOExperiment, CSVClusteringExperiment):
+class HPOGaussianClusteringExperiment(HPOExperiment, GaussianClusteringExperiment):
     def get_hyperband_max_resources(self, combination: dict, unique_params: Optional[dict] = None,
                                     extra_params: Optional[dict] = None, **kwargs):
         raise NotImplementedError('Hyperband is not available for this experiment')
 
     def _load_single_experiment(self, combination: dict, unique_params: Optional[dict] = None,
                                 extra_params: Optional[dict] = None, **kwargs):
-        openml_clustering_experiment = CSVClusteringExperiment(
+        blob_clustering_experiment = GaussianClusteringExperiment(
+            n_samples=self.n_samples, n_features=self.n_features, n_centers=self.n_centers, distances=self.distances,
             # experiment parameters
             experiment_name=self.experiment_name, create_validation_set=self.create_validation_set,
             log_dir=self.log_dir, log_file_name=self.log_file_name, work_root_dir=self.work_root_dir,
-            save_root_dir=self.save_root_dir, clean_work_dir=self.clean_work_dir,
+            save_root_dir=self.save_root_dir, clean_work_dir=self.clean_work_dir, clean_data_dir=False,
             raise_on_fit_error=self.raise_on_fit_error, error_score=self.error_score, log_to_mlflow=self.log_to_mlflow,
             mlflow_tracking_uri=self.mlflow_tracking_uri, check_if_exists=self.check_if_exists, verbose=0
         )
-        return openml_clustering_experiment
+        return blob_clustering_experiment
 
     def _load_data(self, combination: dict, unique_params: Optional[dict] = None, extra_params: Optional[dict] = None,
                    **kwargs):
-        dataset_name = combination['dataset_name']
+        # load the data and save it to disk, but do not return it here
+        load_data_return = super()._load_data(combination=combination, unique_params=unique_params,
+                                              extra_params=extra_params, **kwargs)
+        if 'dataset_name' in load_data_return:
+            dataset_name = load_data_return['dataset_name']
+        else:
+            dataset_name = 'gaussian'
         return {
             'dataset_name': dataset_name
         }
@@ -31,6 +38,5 @@ class HPOCSVClusteringExperiment(HPOExperiment, CSVClusteringExperiment):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    experiment = HPOCSVClusteringExperiment(parser=parser)
+    experiment = HPOGaussianClusteringExperiment(parser=parser)
     experiment.run()
-    
