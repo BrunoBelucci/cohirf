@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "recursive_clustering"
+name = "cohirf"
 version = "2.0"
-description = """recursive_clustering"""
+description = """cohirf"""
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 license = "MIT"
@@ -43,7 +43,7 @@ dependencies = [
 ]
 
 [project.urls]
-"Source code" = "https://github.com/BrunoBelucci/recursive_clustering"
+"Source code" = "https://github.com/BrunoBelucci/cohirf"
 
 [project.optional-dependencies]
 test = [
@@ -54,8 +54,8 @@ docs = [
   "sphinx-rtd-theme",
 ]
 all = [
-    "recursive_clustering[test]",
-    "recursive_clustering[docs]",
+    "cohirf[test]",
+    "cohirf[docs]",
 ]
 
 
