@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 from cohirf.models.cohirf import BaseCoHiRF, CoHiRF
+from joblib import Parallel, delayed
 
 
 class BatchCoHiRF:
@@ -12,14 +13,42 @@ class BatchCoHiRF:
         batch_size: int = 1000,
         max_epochs: int = 10,
         verbose: bool = False,
+        n_jobs: int = 1,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
         self.batch_size = batch_size
         self.max_epochs = max_epochs
         self.verbose = verbose
+        self.n_jobs = n_jobs
 
-    def do_one_epoch(self, X_representatives):
+    def run_one_batch(self, X_representatives, i):
+        n_samples = X_representatives.shape[0]
+        start = i * self.batch_size
+        end = min((i + 1) * self.batch_size, n_samples)
+        indexes = np.arange(start, end)
+        X_batch = X_representatives[indexes]
+        # fit the cohirf model on the batch
+        cohirf_model = self.cohirf_model(**self.cohirf_kwargs)
+        cohirf_model.fit(X_batch)
+
+        parents = cohirf_model.parents_
+        # but the parents are relative to the batch
+        # so we need to update them to be relative to the whole dataset
+        parents = indexes[parents]
+        # all_parents.append(parents)
+
+        representatives_indexes = cohirf_model.representatives_indexes_
+        # but the representatives are relative to the batch
+        # so we need to update them to be relative to the whole dataset
+        representatives_indexes = indexes[representatives_indexes]
+        # all_representatives_indexes.append(representatives_indexes)
+
+        n_clusters = cohirf_model.n_clusters_
+        # all_n_clusters = all_n_clusters + n_clusters
+        return parents, representatives_indexes, n_clusters
+
+    def run_one_epoch(self, X_representatives):
         n_samples = X_representatives.shape[0]
         n_batches = np.ceil(n_samples / self.batch_size).astype(int)
         if n_batches == 1:
@@ -29,32 +58,16 @@ class BatchCoHiRF:
         all_parents = []
         all_representatives_indexes = []
         all_n_clusters = 0
-        for i in range(n_batches):
-            start = i * self.batch_size
-            end = min((i + 1) * self.batch_size, n_samples)
-            indexes = np.arange(start, end)
-            X_batch = X_representatives[indexes]
-            # fit the cohirf model on the batch
-            cohirf_model = self.cohirf_model(**self.cohirf_kwargs)
-            cohirf_model.fit(X_batch)
 
-            parents = cohirf_model.parents_
-            # but the parents are relative to the batch
-            # so we need to update them to be relative to the whole dataset
-            parents = indexes[parents]
-            all_parents.append(parents)
-
-            representatives_indexes = cohirf_model.representatives_indexes_
-            # but the representatives are relative to the batch
-            # so we need to update them to be relative to the whole dataset
-            representatives_indexes = indexes[representatives_indexes]
-            all_representatives_indexes.append(representatives_indexes)
-
-            n_clusters = cohirf_model.n_clusters_
-            all_n_clusters = all_n_clusters + n_clusters
+        parallel = Parallel(n_jobs=self.n_jobs, return_as='list')
+        results = parallel(
+            delayed(self.run_one_batch)(X_representatives, i) for i in range(n_batches)
+        )
+        all_parents, all_representatives_indexes, all_n_clusters = zip(*results)
 
         all_parents = np.concatenate(all_parents)
         all_representatives_indexes = np.concatenate(all_representatives_indexes)
+        all_n_clusters = sum(all_n_clusters)
         return all_representatives_indexes, all_parents, all_n_clusters, stop
 
     def update_parents(self, old_parents, old_representatives_absolute_indexes, new_absolute_parents):
@@ -118,7 +131,7 @@ class BatchCoHiRF:
                 new_local_parents,
                 n_clusters,
                 stop,
-            ) = self.do_one_epoch(X_representatives)
+            ) = self.run_one_epoch(X_representatives)
 
             new_absolute_parents = representatives_absolute_indexes[new_local_parents]
 
