@@ -134,7 +134,8 @@ class BatchCoHiRF:
                 X_representatives = X_representatives.compute()
             else:
                 # we still need dask to avoid memory issues, we will try to persist the array for faster access
-                X_representatives = X_representatives.persist()
+                # X_representatives = X_representatives.persist() (this seems to be memory intensive)
+                pass
 
         return X_representatives
 
