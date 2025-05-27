@@ -31,7 +31,7 @@ class BaseCoHiRF:
         base_model: str | type[BaseEstimator] = "kmeans",
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
-        n_features: int | float | str = 10,  # number of random features that will be sampled
+        n_features: int | float = 10,  # number of random features that will be sampled
         transform_method: Optional[str | type[TransformerMixin]]= None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
@@ -118,18 +118,15 @@ class BaseCoHiRF:
         n_all_features = X.shape[1]
         # random sample
         if isinstance(self.n_features, int):
-            size = min(self.n_features, n_all_features - 1)
+            size = min(self.n_features, n_all_features)
             features = child_random_state.choice(n_all_features, size=size, replace=False)
         elif isinstance(self.n_features, float):
             # sample a percentage of features
             if self.n_features < 0 or self.n_features > 1:
                 raise ValueError("n_features must be between 0 and 1")
             features_size = int(self.n_features * n_all_features)
-            size = min(features_size, n_all_features - 1)
+            size = min(features_size, n_all_features)
             features = child_random_state.choice(n_all_features, size=size, replace=False)
-        elif self.n_features == "full":
-            # full kmeans
-            features = np.arange(n_all_features)
         else:
             raise ValueError(f"n_features {self.n_features} not valid.")
         X_p = X[:, features]
@@ -443,7 +440,7 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         base_model: str | type[BaseEstimator] = "kmeans",
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
-        n_features: int | float | str = 10,  # number of random features that will be sampled
+        n_features: int | float = 10,  # number of random features that will be sampled
         transform_method: Optional[str | type[TransformerMixin]] = None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
@@ -485,7 +482,7 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         base_model: str | type[BaseEstimator] = "kmeans",
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
-        n_features: int | float | str = 10,  # number of random features that will be sampled
+        n_features: int | float = 10,  # number of random features that will be sampled
         transform_method: Optional[str | type[TransformerMixin]] = None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
