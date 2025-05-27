@@ -308,11 +308,10 @@ class BaseCoHiRF:
     ):
         if self.verbose:
             print("Updating parents")
-        new_parents = old_parents.copy()
         d_array = np.arange(new_n_clusters)
         d_array[new_unique_clusters_labels] = new_representatives_absolute_indexes
         new_representative_indexes_assignments = d_array[new_representative_cluster_assignments]
-        new_parents[old_representatives_absolute_indexes] = new_representative_indexes_assignments
+        old_parents[old_representatives_absolute_indexes] = new_representative_indexes_assignments
         # for new_representative_index, new_cluster_label in zip(
         #     new_representatives_absolute_indexes, new_unique_clusters_labels
         # ):
@@ -320,7 +319,7 @@ class BaseCoHiRF:
         #         new_representative_cluster_assignments == new_cluster_label
         #     ]
         #     new_parents[parents_indexes_to_update] = new_representative_index
-        return new_parents
+        return old_parents
 
     # def get_all_parents_indexes(self, parents, representative_index):
     #     all_indexes = set()

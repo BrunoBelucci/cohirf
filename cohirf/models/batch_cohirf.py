@@ -96,9 +96,8 @@ class BatchCoHiRF:
         return all_representatives_indexes, all_parents, all_labels, all_n_clusters, stop
 
     def update_parents(self, old_parents, old_representatives_absolute_indexes, new_absolute_parents):
-        new_parents = old_parents.copy()
-        new_parents[old_representatives_absolute_indexes] = new_absolute_parents
-        return new_parents
+        old_parents[old_representatives_absolute_indexes] = new_absolute_parents
+        return old_parents
 
     # def get_all_parents_indexes(self, parents, representative_index):
     #     all_indexes = set()
