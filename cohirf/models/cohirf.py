@@ -15,8 +15,9 @@ import optuna
 import pandas as pd
 
 
-def update_labels(old_labels, old_representatives_absolute_indexes, old_n_clusters,
-                   new_representative_cluster_assignments, verbose=0):
+def update_labels(
+    old_labels, old_representatives_absolute_indexes, old_n_clusters, new_representative_cluster_assignments, verbose=0
+):
     if verbose > 0:
         print("Updating labels")
     # if it is the first iteration we can directly use
@@ -135,12 +136,12 @@ class BaseCoHiRF:
             transformer = self.transform_method(**transform_kwargs)
             if hasattr(transformer, "random_state"):
                 try:
-                    transformer.set_params(random_state=child_random_state.integers(0, 1e6)) # type: ignore
+                    transformer.set_params(random_state=child_random_state.integers(0, 1e6))  # type: ignore
                 except AttributeError:
                     setattr(transformer, "random_state", child_random_state.integers(0, 1e6))
             elif hasattr(transformer, "random_seed"):
                 try:
-                    transformer.set_params(random_seed=child_random_state.integers(0, 1e6)) # type: ignore
+                    transformer.set_params(random_seed=child_random_state.integers(0, 1e6))  # type: ignore
                 except AttributeError:
                     setattr(transformer, "random_seed", child_random_state.integers(0, 1e6))
             X_p = transformer.fit_transform(X)
@@ -240,11 +241,11 @@ class BaseCoHiRF:
 
         elif self.representative_method == "rbf":
             # replace cosine_distance by rbf_kernel
-            cluster_similarities = rbf_kernel(X_cluster) 
+            cluster_similarities = rbf_kernel(X_cluster)
 
         elif self.representative_method == "rbf_median":
             # replace cosine_distance by rbf_kernel with gamma = median
-            cluster_distances = euclidean_distances(X_cluster) 
+            cluster_distances = euclidean_distances(X_cluster)
             median_distance = np.median(cluster_distances)
             gamma = 1 / (2 * median_distance)
             cluster_similarities = np.exp(-gamma * cluster_distances)
@@ -255,7 +256,7 @@ class BaseCoHiRF:
 
         elif self.representative_method == "laplacian_median":
             # replace cosine_distance by laplacian_kernel with gamma = median
-            cluster_distances = manhattan_distances(X_cluster) 
+            cluster_distances = manhattan_distances(X_cluster)
             median_distance = np.median(cluster_distances)
             gamma = 1 / (2 * median_distance)
             cluster_similarities = np.exp(-gamma * cluster_distances)
@@ -283,7 +284,9 @@ class BaseCoHiRF:
             # sample a representative sample from the cluster
             if self.n_samples_representative is not None:
                 n_samples_representative = min(self.n_samples_representative, X_cluster.shape[0])
-                sampled_indexes = self.random_state.choice(X_cluster.shape[0], size=n_samples_representative, replace=False)
+                sampled_indexes = self.random_state.choice(
+                    X_cluster.shape[0], size=n_samples_representative, replace=False
+                )
                 X_cluster = X_cluster[sampled_indexes]
                 X_cluster_indexes = X_cluster_indexes[sampled_indexes]
 
@@ -309,35 +312,7 @@ class BaseCoHiRF:
         d_array[new_unique_clusters_labels] = new_representatives_absolute_indexes
         new_representative_indexes_assignments = d_array[new_representative_cluster_assignments]
         old_parents[old_representatives_absolute_indexes] = new_representative_indexes_assignments
-        # for new_representative_index, new_cluster_label in zip(
-        #     new_representatives_absolute_indexes, new_unique_clusters_labels
-        # ):
-        #     parents_indexes_to_update = old_representatives_absolute_indexes[
-        #         new_representative_cluster_assignments == new_cluster_label
-        #     ]
-        #     new_parents[parents_indexes_to_update] = new_representative_index
         return old_parents
-
-    # def get_all_parents_indexes(self, parents, representative_index):
-    #     all_indexes = set()
-    #     indexes_to_append = [representative_index]
-    #     first = True
-    #     while len(indexes_to_append) > 0:  # the representative_index itself will always be in the list
-    #         all_indexes.update(indexes_to_append)
-    #         indexes_to_append = np.where(np.isin(parents, indexes_to_append))[0]
-    #         if first:
-    #             first = False
-    #             indexes_to_append = np.setdiff1d(indexes_to_append, representative_index, assume_unique=True)
-    #     return list(all_indexes)
-
-    # def get_labels_from_parents(self, parents, representative_indexes):
-    #     if self.verbose:
-    #         print("Getting labels from parents")
-    #     labels = np.empty(parents.shape[0], dtype=int)
-    #     for i, representative_index in enumerate(representative_indexes):
-    #         all_indexes = self.get_all_parents_indexes(parents, representative_index)
-    #         labels[all_indexes] = i
-    #     return labels
 
     def fit(self, X: pd.DataFrame | np.ndarray, y=None, sample_weight=None):
         if self.verbose:
@@ -420,7 +395,7 @@ class BaseCoHiRF:
         self.n_clusters_ = n_clusters
         self.parents_ = parents
         self.representatives_indexes_ = representatives_absolute_indexes
-        self.cluster_representatives_ = X[representatives_absolute_indexes] 
+        self.cluster_representatives_ = X[representatives_absolute_indexes]
         if self.automatically_get_labels:
             self.labels_ = self.get_labels()
         self.n_iter_ = i
@@ -429,15 +404,11 @@ class BaseCoHiRF:
     def get_labels(self):
         if self.hierarchy_strategy == "parents":
             if self.parents_ is None or self.representatives_indexes_ is None:
-                raise ValueError(
-                    "The model has not been fitted yet. Please call fit() before get_labels()."
-                )
+                raise ValueError("The model has not been fitted yet. Please call fit() before get_labels().")
             self.labels_ = get_labels_from_parents(self.parents_, self.representatives_indexes_, self.verbose)
         elif self.hierarchy_strategy == "labels":
             if self.labels_ is None:
-                raise ValueError(
-                    "The model has not been fitted yet. Please call fit() before get_labels()."
-                )
+                raise ValueError("The model has not been fitted yet. Please call fit() before get_labels().")
             self.labels_ = self.labels_
         else:
             raise ValueError("hierarchy_strategy must be 'parents' or 'labels'")
@@ -448,7 +419,7 @@ class BaseCoHiRF:
         if not self.automatically_get_labels:
             self.get_labels()
         if self.labels_ is None:
-            raise ValueError('Something went wrong, please check the code.')
+            raise ValueError("Something went wrong, please check the code.")
         return self.labels_
 
     def predict(self, X):
@@ -477,7 +448,7 @@ class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         n_jobs: int = 1,
         max_iter: int = 100,
         save_path: bool = False,
-        hierarchy_strategy: Literal['parents', 'labels'] = "parents",
+        hierarchy_strategy: Literal["parents", "labels"] = "parents",
         automatically_get_labels: bool = True,
         # base model parameters
         base_model: str | type[BaseEstimator] = "kmeans",
