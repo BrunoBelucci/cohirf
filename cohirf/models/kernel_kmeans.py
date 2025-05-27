@@ -220,27 +220,31 @@ class KernelKMeans(BaseEstimator, ClusterMixin):
 
             for it in range(self.max_iter):
                 dist.fill(0)
-                self._compute_dist(K, dist, self.within_distances_,
+                valid_labels = self._compute_dist(K, dist, self.within_distances_,
                                    update_within=True)
-                labels_old = self.labels_
-                self.labels_ = dist.argmin(axis=1)
+                if valid_labels:
+                    labels_old = self.labels_
+                    self.labels_ = dist.argmin(axis=1)
 
-                # Compute the number of samples whose cluster did not change
-                # since last iteration.
-                n_same = np.sum((self.labels_ - labels_old) == 0)
-                if 1 - (n_same/n_samples) < self.tol:
-                    if self.verbose:
-                        print("Converged at iteration", it + 1)
-                    break
+                    # Compute the number of samples whose cluster did not change
+                    # since last iteration.
+                    n_same = np.sum((self.labels_ - labels_old) == 0)
+                    if 1 - (n_same/n_samples) < self.tol:
+                        if self.verbose:
+                            print("Converged at iteration", it + 1)
+                        break
 
             if 1 - (n_same/n_samples) > 0:
                 dist.fill(0)
-                self._compute_dist(K, dist, self.within_distances_,
-                                   update_within=False)
-                self.labels_ = dist.argmin(axis=1)
+                valid_labels = self._compute_dist(K, dist, self.within_distances_, update_within=False)
+                if valid_labels:
+                    self.labels_ = dist.argmin(axis=1)
 
             # Computing inertia to choose the best initialization
-            inertia = np.sum((dist[self.labels_] ** 2))
+            if valid_labels:
+                inertia = np.sum((dist[self.labels_] ** 2))
+            else:
+                inertia = np.inf
 
             if self.verbose:
                 print("Initialization %2d, inertia %.3f" % (i, inertia))
@@ -325,7 +329,7 @@ class KernelKMeans(BaseEstimator, ClusterMixin):
             else:
                 raise ValueError(f"n_samples={n_samples} should be >= n_clusters={self.n_clusters}, but this should not happen as we check this in _check_fit_data")
             self.within_distances_.fill(0)
-            return
+            return False
 
         # Step 3: Compute the weighted kernel sum for each cluster
         # KZ = K @ Z gives (n_samples, n_clusters)
@@ -345,6 +349,7 @@ class KernelKMeans(BaseEstimator, ClusterMixin):
 
         # Step 6: Add within-cluster distances to the distance matrix
         dist += within_distances
+        return True
 
     def predict(self, X):
         """Predict the closest cluster each sample in X belongs to.
