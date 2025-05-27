@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from sklearn.datasets import make_blobs
 from sklearn.metrics import adjusted_rand_score
 from cohirf.models.cohirf import CoHiRF
@@ -27,7 +26,7 @@ def test_fit_predict_hierarchy_strategies():
         repetitions=5,
         random_state=42,
         n_features=0.5,
-        hierarchy_strategy="clusters",
+        hierarchy_strategy="labels",
         max_iter=10,
     )
     labels_clusters = model_clusters.fit_predict(X)
