@@ -50,3 +50,15 @@ def test_cohirf_blobs_high_ari():
     y_pred = model.fit_predict(X)
     ari = adjusted_rand_score(y_true, y_pred)
     assert ari > 0.9, f"ARI is {ari}, expected > 0.9 for easy blobs"
+
+def test_cohirf_one_feature():
+    # X with only one feature
+    X = np.array([[0], [1], [2], [3]])
+    model = CoHiRF(
+        repetitions=2,
+        random_state=42,
+        n_features=1.0,
+        max_iter=5,
+    )
+    labels = model.fit_predict(X)
+    assert labels.shape == (4,), f"Expected 4 labels, got {labels.shape}"
