@@ -27,7 +27,7 @@ def test_fit_predict_hierarchy_strategies():
         repetitions=5,
         random_state=42,
         n_features=0.5,
-        hierarchy_strategy="clusters",
+        hierarchy_strategy="labels",
         max_iter=10,
     )
     labels_clusters = model_clusters.fit_predict(X)
