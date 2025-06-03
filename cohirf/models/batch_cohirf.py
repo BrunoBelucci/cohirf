@@ -67,17 +67,37 @@ class BatchCoHiRF:
 
     def run_one_epoch(self, X_representatives):
         n_samples = X_representatives.shape[0]
-        n_batches = np.ceil(n_samples / self.batch_size).astype(int)
-        if n_batches == 1:
-            stop = True
+        n_batches = n_samples // self.batch_size
+        n_batches = n_batches - 1  # we will always leave one batch for the last epoch
+        save_batch_size = self.batch_size
+        if n_batches == 0:
+            # it is the last epoch, we will run the last batch with all the remaining samples
+            n_batches = 1
+            self.batch_size = n_samples
+            last_epoch = True
         else:
-            stop = False
+            # we still have at least more than one batch to run
+            last_epoch = False
 
-        parallel = Parallel(n_jobs=self.n_jobs, return_as='list', verbose=self.verbose)
-        results = parallel(
-            delayed(self.run_one_batch)(X_representatives, i) for i in range(n_batches)
-        )
+        parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)
+        results = parallel(delayed(self.run_one_batch)(X_representatives, i) for i in range(n_batches))
         all_parents, all_labels, all_representatives_indexes, all_n_clusters = zip(*results)
+        all_parents = list(all_parents)
+        all_labels = list(all_labels)
+        all_representatives_indexes = list(all_representatives_indexes)
+        all_n_clusters = list(all_n_clusters)
+
+        self.batch_size = save_batch_size  # restore the batch size
+        if not last_epoch:
+            # we need to add the last batch representatives_indexes and n_clusters
+            last_representatives_indexes = np.arange(n_batches * self.batch_size, n_samples)
+            last_n_clusters = len(last_representatives_indexes)
+            last_parents = last_representatives_indexes
+            last_labels = np.arange(last_n_clusters)
+            all_representatives_indexes.append(last_representatives_indexes)
+            all_n_clusters.append(last_n_clusters)
+            all_parents.append(last_parents)
+            all_labels.append(last_labels)
 
         if self.hierarchy_strategy == "parents":
             all_parents = np.concatenate(all_parents)
@@ -85,15 +105,15 @@ class BatchCoHiRF:
         elif self.hierarchy_strategy == "labels":
             all_parents = None
             all_clusters_cumulative = np.cumsum([0] + list(all_n_clusters))
-            all_labels = np.concatenate([
-                labels + offset for labels, offset in zip(all_labels, all_clusters_cumulative)
-            ])
+            all_labels = np.concatenate(
+                [labels + offset for labels, offset in zip(all_labels, all_clusters_cumulative)]
+            )
         else:
             raise ValueError(f"Unknown hierarchy_strategy: {self.hierarchy_strategy}")
 
         all_representatives_indexes = np.concatenate(all_representatives_indexes)
         all_n_clusters = sum(all_n_clusters)
-        return all_representatives_indexes, all_parents, all_labels, all_n_clusters, stop
+        return all_representatives_indexes, all_parents, all_labels, all_n_clusters, last_epoch
 
     def update_parents(self, old_parents, old_representatives_absolute_indexes, new_absolute_parents):
         old_parents[old_representatives_absolute_indexes] = new_absolute_parents
@@ -139,8 +159,15 @@ class BatchCoHiRF:
 
         return X_representatives
 
-    def fit(self, X: pd.DataFrame | np.ndarray | dd.DataFrame | da.Array, y=None, sample_weight=None,
-             representatives_indexes=None, parents=None, labels=None):
+    def fit(
+        self,
+        X: pd.DataFrame | np.ndarray | dd.DataFrame | da.Array,
+        y=None,
+        sample_weight=None,
+        representatives_indexes=None,
+        parents=None,
+        labels=None,
+    ):
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
@@ -156,9 +183,9 @@ class BatchCoHiRF:
             # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
             # n_samples as representatives
             representatives_absolute_indexes = np.arange(n_samples)
-            if self.hierarchy_strategy == 'parents':
+            if self.hierarchy_strategy == "parents":
                 parents = representatives_absolute_indexes
-            elif self.hierarchy_strategy == 'labels':
+            elif self.hierarchy_strategy == "labels":
                 parents = None
                 self.labels_ = None
             else:
@@ -166,14 +193,14 @@ class BatchCoHiRF:
         else:
             # we consider that we are starting from a previous run
             representatives_absolute_indexes = np.array(representatives_indexes)
-            if self.hierarchy_strategy == 'parents':
+            if self.hierarchy_strategy == "parents":
                 if parents is None:
                     raise ValueError(
                         "When providing representatives_indexes, parents must also be provided for hierarchy_strategy "
                         "'parents'."
                     )
                 parents = np.array(parents)
-            elif self.hierarchy_strategy == 'labels':
+            elif self.hierarchy_strategy == "labels":
                 if labels is None:
                     raise ValueError(
                         "When providing representatives_indexes, labels must also be provided for hierarchy_strategy "
@@ -241,8 +268,13 @@ class BatchCoHiRF:
         return self.labels_
 
     def fit_predict(
-        self, X: pd.DataFrame | np.ndarray, y=None, sample_weight=None, representatives_indexes=None, parents=None,
-        labels=None
+        self,
+        X: pd.DataFrame | np.ndarray,
+        y=None,
+        sample_weight=None,
+        representatives_indexes=None,
+        parents=None,
+        labels=None,
     ):
         self.fit(X, y, sample_weight, representatives_indexes, parents, labels)
         if not self.automatically_get_labels:
