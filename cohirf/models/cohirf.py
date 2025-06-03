@@ -1,7 +1,7 @@
 from typing import Literal, Optional
 import numpy as np
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, HDBSCAN
 from sklearn.metrics.pairwise import (
     cosine_distances,
     rbf_kernel,
@@ -13,6 +13,7 @@ from sklearn.decomposition import PCA
 from joblib import Parallel, delayed
 import optuna
 import pandas as pd
+from sklearn.pipeline import Pipeline
 
 
 def update_labels(
@@ -64,11 +65,11 @@ class BaseCoHiRF:
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
         automatically_get_labels: bool = True,
         # base model parameters
-        base_model: str | type[BaseEstimator] = "kmeans",
+        base_model: str | type[BaseEstimator] | Pipeline = "kmeans",
         base_model_kwargs: Optional[dict] = None,
         # sampling parameters
         n_features: int | float = 10,  # number of random features that will be sampled
-        transform_method: Optional[str | type[TransformerMixin]] = None,
+        transform_method: Optional[str | type[TransformerMixin] | Pipeline] = None,
         transform_kwargs: Optional[dict] = None,
         sample_than_transform: bool = True,
         transform_once_per_iteration: bool = False,
@@ -102,24 +103,44 @@ class BaseCoHiRF:
             self._random_state = np.random.default_rng(self._random_state)
         return self._random_state
 
-    def get_base_model(self, child_random_state):
+    def get_base_model(self, X, child_random_state):
         random_seed = child_random_state.integers(0, 1e6)
         if isinstance(self.base_model, str):
             if self.base_model == "kmeans":
-                return KMeans(**self.base_model_kwargs, random_state=random_seed)
+                base_model = KMeans(**self.base_model_kwargs, random_state=random_seed)
             else:
                 raise ValueError(f"base_model {self.base_model} is not valid.")
-        elif issubclass(self.base_model, BaseEstimator):
-            base_model = self.base_model(**self.base_model_kwargs)
+        elif isinstance(self.base_model, type) and issubclass(self.base_model, BaseEstimator):
+            base_model = self.base_model()
+            base_model.set_params(**self.base_model_kwargs)
             if hasattr(base_model, "random_state"):
                 base_model.set_params(random_state=random_seed)
             elif hasattr(base_model, "random_seed"):
                 base_model.set_params(random_seed=random_seed)
-            return base_model
+            if isinstance(base_model, HDBSCAN):
+                params = base_model.get_params()
+                min_samples = params.get("min_samples", None)
+                min_cluster_size = params.get("min_cluster_size")
+                if min_samples is not None and min_samples > X.shape[0]:
+                    # if min_samples is larger than the number of samples, set it to the number of samples
+                    base_model.set_params(min_samples=X.shape[0])
+                elif min_samples is None and min_cluster_size > X.shape[0]:
+                    # in this case min_samples is equal to min_cluster_size by default
+                    base_model.set_params(min_samples=X.shape[0])
+        elif isinstance(self.base_model, Pipeline):
+            base_model = self.base_model
+            base_model.set_params(**self.base_model_kwargs)
+            for step_name, step in base_model.steps:
+                if hasattr(step, "random_state"):
+                    step.set_params(random_state=random_seed)
+                elif hasattr(step, "random_seed"):
+                    step.set_params(random_seed=random_seed)
         else:
             raise ValueError(f"base_model {self.base_model} is not valid.")
+        return base_model
 
     def sampling_transform_X(self, X, child_random_state):
+        random_seed = child_random_state.integers(0, 1e6)
         if isinstance(self.transform_method, str):
             if self.transform_method == "random":
                 X_p = X  # we already sampled
@@ -136,14 +157,23 @@ class BaseCoHiRF:
             transformer = self.transform_method(**transform_kwargs)
             if hasattr(transformer, "random_state"):
                 try:
-                    transformer.set_params(random_state=child_random_state.integers(0, 1e6))  # type: ignore
+                    transformer.set_params(random_state=random_seed)  # type: ignore
                 except AttributeError:
-                    setattr(transformer, "random_state", child_random_state.integers(0, 1e6))
+                    setattr(transformer, "random_state", random_seed)
             elif hasattr(transformer, "random_seed"):
                 try:
-                    transformer.set_params(random_seed=child_random_state.integers(0, 1e6))  # type: ignore
+                    transformer.set_params(random_seed=random_seed)  # type: ignore
                 except AttributeError:
-                    setattr(transformer, "random_seed", child_random_state.integers(0, 1e6))
+                    setattr(transformer, "random_seed", random_seed)
+            X_p = transformer.fit_transform(X)
+        elif isinstance(self.transform_method, Pipeline):
+            transformer = self.transform_method
+            transformer.set_params(**self.transform_kwargs)
+            for step_name, step in transformer.steps:
+                if hasattr(step, "random_state"):
+                    step.set_params(random_state=random_seed)
+                elif hasattr(step, "random_seed"):
+                    step.set_params(random_seed=random_seed)
             X_p = transformer.fit_transform(X)
         elif self.transform_method is None:
             X_p = X
@@ -192,9 +222,15 @@ class BaseCoHiRF:
         if self.verbose:
             print("Starting repetition", repetition)
         child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), repetition])
-        base_model = self.get_base_model(child_random_state)
         X_p = self.sample_X_j(X_representative, child_random_state)
+        base_model = self.get_base_model(X_p, child_random_state)
         labels = self.get_labels_from_base_model(base_model, X_p)
+        if -1 in labels:
+            # we will consider each noise label (-1 for DBSCAN/HDBSCAN) as a separate cluster
+            # we will assign a new label for each noise sample
+            noise_mask = labels == -1
+            noise_labels = np.arange(np.sum(noise_mask)) + np.max(labels) + 1
+            labels[noise_mask] = noise_labels
         return labels
 
     def get_representative_cluster_assignments(self, X_representative):
@@ -329,7 +365,7 @@ class BaseCoHiRF:
         # representatives_local_indexes = representatives_absolute_indexes
         # each sample starts as its own cluster (and its own parent)
         representatives_cluster_assignments = representatives_absolute_indexes
-        n_clusters = 0  # actually len(representatives_cluster_assignments) but 0 in the beggining for optimization
+        n_clusters = 0  # actually len(representatives_cluster_assignments) but 0 in the beggining to enter the loop
         self.labels_ = None
         if self.hierarchy_strategy == "parents":
             parents = representatives_absolute_indexes
@@ -342,7 +378,7 @@ class BaseCoHiRF:
         self.n_clusters_iter_ = []
         self.labels_iter_ = []
         # iterate until every sequence of labels is unique
-        while (len(representatives_cluster_assignments) != n_clusters and i < self.max_iter) or i == 0:
+        while (len(representatives_cluster_assignments) != n_clusters and i < self.max_iter):
             if self.verbose:
                 print("Iteration", i)
 
