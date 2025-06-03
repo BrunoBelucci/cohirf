@@ -7,6 +7,36 @@ import numpy as np
 from cohirf.experiment.open_ml_clustering_experiment import ClusteringExperiment
 
 
+def make_multivariate_normal(n_samples, n_informative_features, n_random_features, n_centers, distance, std, seed):
+    rng = np.random.default_rng(seed)
+    # Generate equally spaced centers using a regular simplex
+    # Start with a random orthonormal basis in P dimensions
+    centers = np.random.randn(n_centers, n_informative_features)
+    centers, _ = np.linalg.qr(centers.T)  # Orthonormalize columns
+    centers = centers.T
+    # Scale the simplex to achieve the desired pairwise distance
+    centers *= distance / np.sqrt(2)
+    # Covariance matrix (same standard deviation for all features) and same for all clusters
+    cov = np.eye(n_informative_features) * std ** 2
+    # Generate clusters
+    X = []
+    y = []
+    for i, mean in enumerate(centers):
+        cluster_samples = rng.multivariate_normal(mean, cov, n_samples, method='cholesky')
+        if n_random_features > 0:
+            random_features = rng.normal(size=(n_samples, n_random_features))
+            cluster_samples = np.hstack([cluster_samples, random_features])
+        X.append(cluster_samples)
+        y.extend([i] * n_samples)
+    X = np.vstack(X)
+    y = np.array(y)
+    # shuffle data
+    idx = np.random.permutation(n_samples * n_centers)
+    X = X[idx]
+    y = y[idx]
+    return X, y
+
+
 class GaussianClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
@@ -145,32 +175,15 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             X = np.load(X_file)
             y = np.load(y_file)
         else:
-            rng = np.random.default_rng(seed_dataset)
-            # Generate equally spaced centers using a regular simplex
-            # Start with a random orthonormal basis in P dimensions
-            centers = np.random.randn(n_centers, n_informative_features)
-            centers, _ = np.linalg.qr(centers.T)  # Orthonormalize columns
-            centers = centers.T
-            # Scale the simplex to achieve the desired pairwise distance
-            centers *= distance / np.sqrt(2)
-            # Covariance matrix (identity matrix for simplicity)
-            cov = np.eye(n_informative_features)
-            # Generate clusters
-            X = []
-            y = []
-            for i, mean in enumerate(centers):
-                cluster_samples = rng.multivariate_normal(mean, cov, n_samples, method='cholesky')
-                if n_random_features > 0:
-                    random_features = rng.normal(size=(n_samples, n_random_features))
-                    cluster_samples = np.hstack([cluster_samples, random_features])
-                X.append(cluster_samples)
-                y.extend([i] * n_samples)
-            X = np.vstack(X)
-            y = np.array(y)
-            # shuffle data
-            idx = np.random.permutation(n_samples * n_centers)
-            X = X[idx]
-            y = y[idx]
+            X, y = make_multivariate_normal(
+                n_samples=n_samples,
+                n_informative_features=n_informative_features,
+                n_random_features=n_random_features,
+                n_centers=n_centers,
+                distance=distance,
+                std=1.0,  # standard deviation for the clusters
+                seed=seed_dataset
+            )
             # save on work_dir for later use
             os.makedirs(dataset_dir, exist_ok=True)
             np.save(X_file, X)
