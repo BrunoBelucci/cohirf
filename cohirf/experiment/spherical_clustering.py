@@ -74,7 +74,7 @@ class SphericalClusteringExperiment(ClusteringExperiment):
         n_spheres: int = 2,
         n_samples: int | list[int] = 2000,
         radius_separation: float = 0.5,
-        radius_std: float = 0.1,
+        radius_std: float = 0.01,
         add_radius_as_feature: bool = False,
         seeds_dataset: int | list[int] = 0,
         **kwargs,
