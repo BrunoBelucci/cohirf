@@ -10,7 +10,7 @@ class HPOBlobClusteringExperiment(HPOExperiment, BlobClusteringExperiment):
 
     def _load_single_experiment(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         blob_clustering_experiment = BlobClusteringExperiment(
-            n_samples=self.n_samples, n_features=self.n_features, centers=self.centers, cluster_std=self.cluster_std,
+            n_samples=self.n_samples, n_features_dataset=self.n_features_dataset, centers=self.centers, cluster_std=self.cluster_std,
             center_box=self.center_box, shuffle=self.shuffle,
             # experiment parameters
             experiment_name=self.experiment_name, create_validation_set=self.create_validation_set,

@@ -16,7 +16,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
             self,
             *args,
             n_samples: int | list[int] = 100,
-            n_features: int | list[int] = 2,
+            n_features_dataset: int | list[int] = 2,
             centers: int = 3,
             cluster_std: float = 1.0,
             center_box: tuple[float, float] = (-10.0, 10.0),
@@ -28,9 +28,9 @@ class BlobClusteringExperiment(ClusteringExperiment):
         if isinstance(n_samples, int):
             n_samples = [n_samples]
         self.n_samples = n_samples
-        if isinstance(n_features, int):
-            n_features = [n_features]
-        self.n_features = n_features
+        if isinstance(n_features_dataset, int):
+            n_features_dataset = [n_features_dataset]
+        self.n_features_dataset = n_features_dataset
         self.centers = centers
         self.cluster_std = cluster_std
         self.center_box = center_box
@@ -42,7 +42,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
         self.parser.add_argument('--n_samples', type=int, default=self.n_samples, nargs='*')
-        self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
+        self.parser.add_argument('--n_features_dataset', type=int, default=self.n_features_dataset, nargs='*')
         self.parser.add_argument('--centers', type=int, default=self.centers)
         self.parser.add_argument('--cluster_std', type=float, default=self.cluster_std)
         self.parser.add_argument('--center_box', type=tuple, default=self.center_box)
@@ -52,7 +52,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.n_samples = args.n_samples
-        self.n_features = args.n_features
+        self.n_features_dataset = args.n_features_dataset
         self.centers = args.centers
         self.cluster_std = args.cluster_std
         self.center_box = args.center_box
@@ -61,10 +61,10 @@ class BlobClusteringExperiment(ClusteringExperiment):
         return args
 
     def _get_combinations(self):
-        combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'n_samples', 'n_features']
+        combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'n_samples', 'n_features_dataset']
         if self.combinations is None:
             combinations = list(product(self.models_nickname, self.seeds_models,
-                                        self.seeds_dataset, self.n_samples, self.n_features))
+                                        self.seeds_dataset, self.n_samples, self.n_features_dataset))
         else:
             combinations = self.combinations
             # ensure that combinations have at least the same length as combination_names
@@ -83,7 +83,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
 
     def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         n_samples = combination['n_samples']
-        n_features = combination['n_features']
+        n_features = combination['n_features_dataset']
         centers = unique_params['centers']
         cluster_std = unique_params['cluster_std']
         center_box = unique_params['center_box']
@@ -108,7 +108,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
 
     def run_blob_experiment_combination(self, model_nickname: str, seed_model: int = 0, seed_dataset: int = 0,
                                         model_params: Optional[dict] = None, fit_params: Optional[dict] = None,
-                                        n_samples: int = 100, n_features: int = 2, centers: int = 3,
+                                        n_samples: int = 100, n_features_dataset: int = 2, centers: int = 3,
                                         cluster_std: float = 1.0,
                                         center_box: tuple[float, float] = (-10.0, 10.0), shuffle: bool = True,
                                         n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False,
@@ -121,7 +121,7 @@ class BlobClusteringExperiment(ClusteringExperiment):
             'model_params': model_params,
             'fit_params': fit_params,
             'n_samples': n_samples,
-            'n_features': n_features,
+            'n_features_dataset': n_features_dataset,
         }
         unique_params = {
             'centers': centers,
