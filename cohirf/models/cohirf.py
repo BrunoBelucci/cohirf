@@ -102,6 +102,15 @@ class BaseCoHiRF:
         elif isinstance(self._random_state, int):
             self._random_state = np.random.default_rng(self._random_state)
         return self._random_state
+    
+    @random_state.setter
+    def random_state(self, value):
+        if value is None:
+            self._random_state = np.random.default_rng()
+        elif isinstance(value, int):
+            self._random_state = np.random.default_rng(value)
+        else:
+            raise ValueError("random_state must be an integer or None.")
 
     def get_base_model(self, X, child_random_state):
         random_seed = child_random_state.integers(0, 1e6)
@@ -192,6 +201,8 @@ class BaseCoHiRF:
             if self.n_features < 0 or self.n_features > 1:
                 raise ValueError("n_features must be between 0 and 1")
             features_size = int(self.n_features * n_all_features)
+            # we ensure that we get at least one feature
+            features_size = max(features_size, 1)
             size = min(features_size, n_all_features)
             features = child_random_state.choice(n_all_features, size=size, replace=False)
         else:
@@ -572,7 +583,7 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
         self.kmeans_max_iter = kmeans_max_iter
         self.kmeans_tol = kmeans_tol
 
-    def get_base_model(self, child_random_state):
+    def get_base_model(self, X, child_random_state):
         random_seed = child_random_state.integers(0, 1e6)
         if self.base_model == "kmeans":
             return KMeans(
