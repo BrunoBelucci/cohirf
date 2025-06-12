@@ -84,7 +84,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         n_jobs = extra_params.get('n_jobs', self.n_jobs)
         random.seed(seed_model)
         np.random.seed(seed_model)
-        model_class, model_default_params = deepcopy(self.models_dict[model_nickname])
+        model_class, model_default_params, _, _ = deepcopy(self.models_dict[model_nickname])
         model_default_params.update(model_params)
         model = model_class(**model_default_params)
         if hasattr(model, 'n_jobs'):

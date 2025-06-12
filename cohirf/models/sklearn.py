@@ -34,20 +34,20 @@ def create_search_space_agglomerative_clustering():
 
 
 def create_search_space_dbscan():
-    search_space = dict(eps=optuna.distributions.FloatDistribution(1e-1, 1e2, log=True),
-                        min_samples=optuna.distributions.IntDistribution(2, 10))
+    search_space = dict(eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                        min_samples=optuna.distributions.IntDistribution(2, 50))
     default_values = dict(eps=0.5, min_samples=5)
     return search_space, default_values
 
 
 def create_search_space_hdbscan():
-    search_space = dict(min_cluster_size=optuna.distributions.IntDistribution(2, 10))
+    search_space = dict(min_cluster_size=optuna.distributions.IntDistribution(2, 50))
     default_values = dict(min_cluster_size=5)
     return search_space, default_values
 
 
 def create_search_space_optics():
-    search_space = dict(min_samples=optuna.distributions.IntDistribution(2, 10))
+    search_space = dict(min_samples=optuna.distributions.IntDistribution(2, 50))
     default_values = dict(min_samples=5)
     return search_space, default_values
 

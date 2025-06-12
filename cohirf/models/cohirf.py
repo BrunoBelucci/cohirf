@@ -484,50 +484,6 @@ class BaseCoHiRF:
         return labels
 
 
-class ModularCoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
-    def __init__(
-        self,
-        repetitions: int = 10,
-        verbose: int | bool = 0,
-        representative_method: str = "closest_overall",
-        n_samples_representative: Optional[int] = None,
-        random_state: Optional[int] = None,
-        n_jobs: int = 1,
-        max_iter: int = 100,
-        save_path: bool = False,
-        hierarchy_strategy: Literal["parents", "labels"] = "parents",
-        automatically_get_labels: bool = True,
-        # base model parameters
-        base_model: str | type[BaseEstimator] = "kmeans",
-        base_model_kwargs: Optional[dict] = None,
-        # sampling parameters
-        n_features: int | float = 10,  # number of random features that will be sampled
-        transform_method: Optional[str | type[TransformerMixin]] = None,
-        transform_kwargs: Optional[dict] = None,
-        sample_than_transform: bool = True,
-        transform_once_per_iteration: bool = False,
-    ):
-        super().__init__(
-            repetitions,
-            verbose,
-            representative_method,
-            n_samples_representative,
-            random_state,
-            n_jobs,
-            max_iter,
-            save_path,
-            hierarchy_strategy,
-            automatically_get_labels,
-            base_model=base_model,
-            base_model_kwargs=base_model_kwargs,
-            transform_method=transform_method,
-            n_features=n_features,
-            transform_kwargs=transform_kwargs,
-            sample_than_transform=sample_than_transform,
-            transform_once_per_iteration=transform_once_per_iteration,
-        )
-
-
 class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
 
     def __init__(
@@ -601,13 +557,13 @@ class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
     @staticmethod
     def create_search_space():
         search_space = dict(
-            n_features=optuna.distributions.FloatDistribution(0.1, 1),
+            n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
             repetitions=optuna.distributions.IntDistribution(3, 10),
-            kmeans_n_clusters=optuna.distributions.IntDistribution(2, 10),
+            kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
         )
         default_values = dict(
             n_features=0.3,
-            repetitions=10,
+            repetitions=5,
             kmeans_n_clusters=3,
         )
         return search_space, default_values
