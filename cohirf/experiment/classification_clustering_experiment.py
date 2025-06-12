@@ -31,7 +31,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             shuffle: bool = True,
             seeds_dataset: int | list[int] = 0,
             seeds_unified: Optional[int | list[int]] = None,
-            n_features: Optional[int | list[int]] = None,
+            n_features_dataset: Optional[int | list[int]] = None,
             pct_random: Optional[float | list[float]] = None,
             add_outlier: bool = False,
             **kwargs
@@ -67,9 +67,9 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         if isinstance(seeds_unified, int) or seeds_unified is None:
             seeds_unified = [seeds_unified] # type: ignore
         self.seeds_unified = seeds_unified
-        if isinstance(n_features, int) or n_features is None:
-            n_features = [n_features]  # type: ignore
-        self.n_features = n_features
+        if isinstance(n_features_dataset, int) or n_features_dataset is None:
+            n_features_dataset = [n_features_dataset]  # type: ignore
+        self.n_features_dataset = n_features_dataset
         if isinstance(pct_random, float) or pct_random is None:
             pct_random = [pct_random]  # type: ignore
         self.pct_random = pct_random
@@ -79,7 +79,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         super()._add_arguments_to_parser()
         self.parser.add_argument('--n_samples', type=int, default=self.n_samples, nargs='*')
         self.parser.add_argument('--n_random', type=int, default=self.n_random, nargs='*')
-        self.parser.add_argument('--n_informative', type=int, default=self.n_informative)
+        self.parser.add_argument('--n_informative', type=int, default=self.n_informative, nargs='*')
         self.parser.add_argument('--n_redundant', type=int, default=self.n_redundant)
         self.parser.add_argument('--n_repeated', type=int, default=self.n_repeated)
         self.parser.add_argument('--n_classes', type=int, default=self.n_classes, nargs='*')
@@ -93,7 +93,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument('--shuffle', type=bool, default=self.shuffle)
         self.parser.add_argument('--seeds_dataset', type=int, default=self.seeds_dataset, nargs='*')
         self.parser.add_argument('--seeds_unified', type=int, default=self.seeds_unified, nargs='*')
-        self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
+        self.parser.add_argument("--n_features_dataset", type=int, default=self.n_features_dataset, nargs="*")
         self.parser.add_argument('--pct_random', type=float, default=self.pct_random, nargs='*')
         self.parser.add_argument('--add_outlier', action='store_true')
 
@@ -115,16 +115,27 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.shuffle = args.shuffle
         self.seeds_dataset = args.seeds_dataset
         self.seeds_unified = args.seeds_unified
-        self.n_features = args.n_features
+        self.n_features_dataset = args.n_features_dataset
         self.pct_random = args.pct_random
         self.add_outlier = args.add_outlier
         return args
 
     def _get_combinations(self):
-        combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'n_samples', 'n_random', 'n_informative',
-                             'n_features', 'pct_random', 'class_sep', 'seed_unified', 'n_classes']
+        combination_names = [
+            "model_nickname",
+            "seed_model",
+            "seed_dataset",
+            "n_samples",
+            "n_random",
+            "n_informative",
+            "n_features_dataset",
+            "pct_random",
+            "class_sep",
+            "seed_unified",
+            "n_classes",
+        ]
         if self.combinations is None:
-            if not isinstance(self.n_features, list):
+            if not isinstance(self.n_features_dataset, list):
                 raise ValueError('n_features must be a list')
             if not isinstance(self.pct_random, list):
                 raise ValueError('pct_random must be a list')
@@ -133,7 +144,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             if not isinstance(self.seeds_unified, list):
                 raise ValueError('seeds_unified must be a list')
             combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.n_samples,
-                                        self.n_random, self.n_informative, self.n_features, self.pct_random,
+                                        self.n_random, self.n_informative, self.n_features_dataset, self.pct_random,
                                         self.class_sep,
                                         self.seeds_unified, self.n_classes))
         else:
@@ -182,15 +193,15 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         scale = unique_params['scale']
         shuffle = unique_params['shuffle']
         seed_dataset = combination['seed_dataset']
-        n_features = combination['n_features']
+        n_features_dataset = combination["n_features_dataset"]
         pct_random = combination['pct_random']
         seed_unified = combination['seed_unified']
         add_outlier = unique_params['add_outlier']
 
-        if n_features is not None:
+        if n_features_dataset is not None:
             if pct_random is not None:
-                n_random = int(n_features * pct_random)
-                n_informative = n_features - n_random
+                n_random = int(n_features_dataset * pct_random)
+                n_informative = n_features_dataset - n_random
             else:
                 raise ValueError('n_features and pct_random must be both None or both not None')
 
@@ -233,7 +244,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             n_repeated: int = 0, n_classes: int = 2, n_clusters_per_class: int = 1, weights: Optional[list] = None,
             flip_y: float = 0.0, class_sep: float = 1.0, hypercube: bool = True, shift: float = 0.0,
             scale: float = 1.0, shuffle: bool = True,
-            n_features: Optional[int] = None, pct_random: Optional[float] = None, seed_unified: Optional[int] = None,
+            n_features_dataset: Optional[int] = None, pct_random: Optional[float] = None, seed_unified: Optional[int] = None,
             add_outlier: bool = False,
             n_jobs: int = 1, return_results: bool = True,
             timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
@@ -241,19 +252,19 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
     ):
 
         combination = {
-            'model_nickname': model_nickname,
-            'seed_model': seed_model,
-            'seed_dataset': seed_dataset,
-            'model_params': model_params,
-            'fit_params': fit_params,
-            'n_samples': n_samples,
-            'n_random': n_random,
-            'n_informative': n_informative,
-            'class_sep': class_sep,
-            'n_features': n_features,
-            'pct_random': pct_random,
-            'seed_unified': seed_unified,
-            'n_classes': n_classes,
+            "model_nickname": model_nickname,
+            "seed_model": seed_model,
+            "seed_dataset": seed_dataset,
+            "model_params": model_params,
+            "fit_params": fit_params,
+            "n_samples": n_samples,
+            "n_random": n_random,
+            "n_informative": n_informative,
+            "class_sep": class_sep,
+            "n_features_dataset": n_features_dataset,
+            "pct_random": pct_random,
+            "seed_unified": seed_unified,
+            "n_classes": n_classes,
         }
         unique_params = {
             'n_redundant': n_redundant,
