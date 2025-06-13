@@ -51,7 +51,7 @@ def get_labels_from_parents(parents, representative_indexes, verbose=0):
     return labels
 
 
-class BaseCoHiRF:
+class BaseCoHiRF(ClusterMixin, BaseEstimator):
     def __init__(
         self,
         repetitions: int = 10,
@@ -484,7 +484,7 @@ class BaseCoHiRF:
         return labels
 
 
-class CoHiRF(BaseCoHiRF, ClusterMixin, BaseEstimator):
+class CoHiRF(BaseCoHiRF):
 
     def __init__(
         self,
