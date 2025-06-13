@@ -113,6 +113,7 @@ def visualize_3d_data(data, labels):
 
 
 class SphericalClusteringExperiment(ClusteringExperiment):
+
     def __init__(
         self,
         *args,
@@ -122,6 +123,7 @@ class SphericalClusteringExperiment(ClusteringExperiment):
         radius_std: float = 0.01,
         add_radius_as_feature: bool = False,
         seeds_dataset: int | list[int] = 0,
+        seeds_unified: Optional[int | list[int]] = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -135,6 +137,8 @@ class SphericalClusteringExperiment(ClusteringExperiment):
         if isinstance(seeds_dataset, int):
             seeds_dataset = [seeds_dataset]
         self.seeds_dataset = seeds_dataset
+        if isinstance(seeds_unified, int) or seeds_unified is None:
+            seeds_unified = [seeds_unified]  # type: ignore
 
     @property
     def models_dict(self):
@@ -148,6 +152,7 @@ class SphericalClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument("--radius_std", type=float, default=self.radius_std)
         self.parser.add_argument("--add_radius_as_feature", action="store_true", default=self.add_radius_as_feature)
         self.parser.add_argument("--seeds_dataset", type=int, default=self.seeds_dataset, nargs="*")
+        self.parser.add_argument('--seeds_unified', type=int, default=self.seeds_unified, nargs='*')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -157,14 +162,15 @@ class SphericalClusteringExperiment(ClusteringExperiment):
         self.radius_std = args.radius_std
         self.add_radius_as_feature = args.add_radius_as_feature
         self.seeds_dataset = args.seeds_dataset
+        self.seeds_unified = args.seeds_unified
         return args
 
     def _get_combinations(self):
-        combination_names = ["model_nickname", "seed_model", "seed_dataset", "n_samples"]
+        combination_names = ["model_nickname", "seed_model", "seed_dataset", "n_samples", "seed_unified"]
         if self.combinations is None:
             combinations = list(
                 product(
-                    self.models_nickname, self.seeds_models, self.seeds_dataset, self.n_samples,
+                    self.models_nickname, self.seeds_models, self.seeds_dataset, self.n_samples, self.seeds_unified
                 )
             )
         else:
@@ -194,6 +200,30 @@ class SphericalClusteringExperiment(ClusteringExperiment):
             timeout_fit=self.timeout_fit,
         )
         return combinations, combination_names, unique_params, extra_params
+
+    def _before_load_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+        seed_unified = combination["seed_unified"]
+        seed_model = combination["seed_model"]
+        if seed_unified is not None:
+            combination["seed_model"] = seed_unified
+        return dict(seed_model=seed_model)
+
+    def _after_load_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+        seed_model = kwargs["before_load_model_return"]["seed_model"]
+        combination["seed_model"] = seed_model
+        return {}
+    
+    def _before_load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+        seed_unified = combination["seed_unified"]
+        seed_dataset = combination["seed_dataset"]
+        if seed_unified is not None:
+            combination["seed_dataset"] = seed_unified
+        return dict(seed_dataset=seed_dataset)
+    
+    def _after_load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+        seed_dataset = kwargs["before_load_data_return"]["seed_dataset"]
+        combination["seed_dataset"] = seed_dataset
+        return {}
 
     def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         n_samples = combination["n_samples"]
