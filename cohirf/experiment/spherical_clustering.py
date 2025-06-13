@@ -139,6 +139,7 @@ class SphericalClusteringExperiment(ClusteringExperiment):
         self.seeds_dataset = seeds_dataset
         if isinstance(seeds_unified, int) or seeds_unified is None:
             seeds_unified = [seeds_unified]  # type: ignore
+        self.seeds_unified = seeds_unified
 
     @property
     def models_dict(self):
