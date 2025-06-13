@@ -170,5 +170,4 @@ models_dict = {
         dict(n_clusters=optuna.distributions.IntDistribution(2, 30)),
         dict(n_clusters=15),
     ),
-    WBMS.__name__: (WBMS, dict()),
 }
