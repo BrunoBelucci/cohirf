@@ -62,15 +62,15 @@ def is_data_in_projection(tuple, candidate, xsi):
 
 
 def get_dense_units_for_dim(data, prev_dim_dense_units, dim, xsi, tau):
-    candidates = self_join(prev_dim_dense_units, dim)
+    candidates = self_join(prev_dim_dense_units, dim) # This is slow!
     prune(candidates, prev_dim_dense_units)
 
     # Count number of elements in candidates
     projection = np.zeros(len(candidates))
     number_of_data_points = np.shape(data)[0]
-    for dataIndex in range(number_of_data_points):
+    for dataIndex in range(number_of_data_points): # This is also slow!
         for i in range(len(candidates)):
-            if is_data_in_projection(data[dataIndex], candidates[i], xsi):
+            if is_data_in_projection(data[dataIndex], candidates[i], xsi): # sloooooow!
                 projection[i] += 1
     # print("projection: ", projection)
 
@@ -82,7 +82,7 @@ def get_dense_units_for_dim(data, prev_dim_dense_units, dim, xsi, tau):
 
 def build_graph_from_dense_units(dense_units):
     graph = np.identity(len(dense_units))
-    for i in range(len(dense_units)):
+    for i in range(len(dense_units)):  # This is slow!
         for j in range(len(dense_units)):
             graph[i, j] = get_edge(dense_units[i], dense_units[j])
     return graph
