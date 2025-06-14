@@ -316,7 +316,7 @@ class Proclus(ClusterMixin, BaseEstimator):
     def __init__(
             self,
             n_clusters=2,
-            avg_dims=3,
+            avg_dims=0.5,
             min_deviation=0.1,
             cte_A=30,
             cte_B=3,
@@ -336,8 +336,13 @@ class Proclus(ClusterMixin, BaseEstimator):
 
     def fit(self, X, y=None, sample_weight=None):
         random_state = check_random_state(self.random_state)
+        n, p = X.shape
+        if p < 2:
+            raise ValueError("The number of features must be at least 2.")
+        avg_dims = int(self.avg_dims * p)
+        avg_dims = max(2, avg_dims)  # ensure at least one dimension is selected
         seed = random_state.randint(0, 1e6)
-        medoids, medoids_dims, labels = proclus(X, k=self.n_clusters, l=self.avg_dims,
+        medoids, medoids_dims, labels = proclus(X, k=self.n_clusters, l=avg_dims,
                                                 minDeviation=self.min_deviation, A=self.cte_A,
                                                 B=self.cte_B, niters=self.max_iter, seed=seed)
         self.medoids_ = medoids
@@ -355,10 +360,10 @@ class Proclus(ClusterMixin, BaseEstimator):
     def create_search_space():
         search_space = dict(
             n_clusters=optuna.distributions.IntDistribution(2, 30),
-            avg_dims=optuna.distributions.IntDistribution(2, 30),
+            avg_dims=optuna.distributions.FloatDistribution(0.1, 1),
         )
         default_values = dict(
             n_clusters=8,
-            avg_dims=3,
+            avg_dims=0.5,
         )
         return search_space, default_values

@@ -90,11 +90,11 @@ models_dict = {
         dict(),
         dict(
             n_clusters=optuna.distributions.IntDistribution(2, 30),
-            avg_dims=optuna.distributions.IntDistribution(2, 30),
+            avg_dims=optuna.distributions.FloatDistribution(0.1, 1.0),
         ),
         dict(
             n_clusters=8,
-            avg_dims=3,
+            avg_dims=0.5,
         ),
     ),
     SpectralSubspaceRandomization.__name__: (
