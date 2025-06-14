@@ -64,7 +64,7 @@ models_dict = {
             p=optuna.distributions.FloatDistribution(0.0, 1.0),
             c=optuna.distributions.CategoricalDistribution([1e-3, 1e-2, 1e-1, 1.0, 1e1, 1e2]),
             lambda_=optuna.distributions.CategoricalDistribution([1e-3, 1e-2, 1e-1, 1.0, 1e1, 1e2]),
-            alpha=optuna.distributions.FloatDistribution(1.0, 4.0),
+            alpha=optuna.distributions.IntDistribution(1, 4),
             sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
         ),
         dict(
