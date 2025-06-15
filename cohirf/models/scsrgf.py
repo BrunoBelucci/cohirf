@@ -113,7 +113,9 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
         all_matrices = []
         for i in range(self.n_similarities):
             seq = random_state.permutation(X.shape[1])
-            X_i = X[:, seq[:int(X.shape[1] * self.sampling_ratio)]]
+            n_features = int(X.shape[1] * self.sampling_ratio)
+            n_features = max(n_features, 1)  # Ensure at least one feature is selected
+            X_i = X[:, seq[:n_features]]
             similarity_matrix = knn_sparse(X_i, self.knn)
             all_matrices.append(similarity_matrix)
 
