@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from cohirf.experiment.clustering_experiment import ClusteringExperiment
 from cohirf.experiment.tested_models import models_dict as default_models_dict
 from cohirf.models.cohirf import CoHiRF, BaseCoHiRF
+from cohirf.models.batch_cohirf import BatchCoHiRF
 import optuna
 from sklearn.cluster import DBSCAN
 
@@ -16,36 +17,108 @@ models_dict.update(
     {
         CoHiRF.__name__: (
             CoHiRF,
-            dict(),
+            dict(n_features=4),
             dict(
-                n_features=optuna.distributions.IntDistribution(1, 4),
                 repetitions=optuna.distributions.IntDistribution(2, 10),
                 kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
             ),
             dict(
-                n_features=4,
                 repetitions=5,
                 kmeans_n_clusters=3,
             ),
         ),
         "CoHiRF-DBSCAN": (
             BaseCoHiRF,
-            dict(base_model=DBSCAN),
+            dict(base_model=DBSCAN, n_features=4, repetitions=1),
             dict(
-                n_features=optuna.distributions.IntDistribution(1, 4),
-                repetitions=optuna.distributions.IntDistribution(1, 10),
                 base_model_kwargs=dict(
                     eps=optuna.distributions.FloatDistribution(1e-1, 10),
                     min_samples=optuna.distributions.IntDistribution(2, 50),
                 ),
             ),
             dict(
-                n_features=4,
-                repetitions=5,
                 base_model_kwargs=dict(
                     eps=0.5,
                     min_samples=5,
                 ),
+            ),
+        ),
+        "BatchCoHiRF": (
+            BatchCoHiRF,
+            dict(cohirf_kwargs=dict(n_features=4)),
+            dict(
+                cohirf_kwargs=dict(
+                    repetitions=optuna.distributions.IntDistribution(2, 10),
+                    kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
+                )
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    repetitions=5,
+                    kmeans_n_clusters=3,
+                )
+            ),
+        ),
+        "BatchCoHiRF-1iter": (
+            BatchCoHiRF,
+            dict(cohirf_kwargs=dict(max_iter=1, n_features=4)),
+            dict(
+                cohirf_kwargs=dict(
+                    repetitions=optuna.distributions.IntDistribution(2, 10),
+                    kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
+                )
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    repetitions=5,
+                    kmeans_n_clusters=3,
+                )
+            ),
+        ),
+        "BatchCoHiRF-DBSCAN": (
+            BatchCoHiRF,
+            dict(
+                cohirf_model=BaseCoHiRF,
+                cohirf_kwargs=dict(base_model=DBSCAN, n_features=4, repetitions=1),
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                        min_samples=optuna.distributions.IntDistribution(2, 50),
+                    ),
+                )
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        eps=0.5,
+                        min_samples=5,
+                    ),
+                )
+            ),
+        ),
+        "BatchCoHiRF-DBSCAN-1iter": (
+            BatchCoHiRF,
+            dict(
+                cohirf_model=BaseCoHiRF,
+                cohirf_kwargs=dict(base_model=DBSCAN, max_iter=1, n_features=4, repetitions=1),
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                        min_samples=optuna.distributions.IntDistribution(2, 50),
+                    ),
+                )
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        eps=0.5,
+                        min_samples=5,
+                    ),
+                )
             ),
         ),
     }

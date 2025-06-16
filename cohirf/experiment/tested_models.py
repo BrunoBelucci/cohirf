@@ -6,6 +6,7 @@ from cohirf.models.proclus import Proclus
 from cohirf.models.scsrgf import SpectralSubspaceRandomization
 from cohirf.models.sklearn import (KMeans, OPTICS, DBSCAN, AgglomerativeClustering, SpectralClustering,
                                                  MeanShift, AffinityPropagation, HDBSCAN)
+from cohirf.models.batch_cohirf import BatchCoHiRF
 from cohirf.models.WBMS import WBMS
 import optuna
 
@@ -25,24 +26,114 @@ models_dict = {
             kmeans_n_clusters=3,
         ),
     ),
-	"CoHiRF-DBSCAN": (
-		BaseCoHiRF,
-		dict(base_model=DBSCAN),
-		dict(
+    "CoHiRF-DBSCAN": (
+        BaseCoHiRF,
+        dict(base_model=DBSCAN),
+        dict(
             n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
-			repetitions=optuna.distributions.IntDistribution(1, 10),
-			base_model_kwargs=dict(
-				eps=optuna.distributions.FloatDistribution(1e-1, 10),
+            repetitions=optuna.distributions.IntDistribution(1, 10),
+            base_model_kwargs=dict(
+                eps=optuna.distributions.FloatDistribution(1e-1, 10),
                 min_samples=optuna.distributions.IntDistribution(2, 50),
             ),
         ),
-		dict(
+        dict(
             n_features=0.3,
-			repetitions=5,
-			base_model_kwargs=dict(
+            repetitions=5,
+            base_model_kwargs=dict(
                 eps=0.5,
                 min_samples=5,
             ),
+        ),
+    ),
+    "BatchCoHiRF": (
+        BatchCoHiRF,
+        dict(),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
+                repetitions=optuna.distributions.IntDistribution(2, 10),
+                kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
+            )
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=0.3,
+                repetitions=5,
+                kmeans_n_clusters=3,
+            )
+        ),
+    ),
+    "BatchCoHiRF-1iter": (
+        BatchCoHiRF,
+        dict(cohirf_kwargs=dict(max_iter=1)),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
+                repetitions=optuna.distributions.IntDistribution(2, 10),
+                kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
+            )
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=0.3,
+                repetitions=5,
+                kmeans_n_clusters=3,
+            )
+        ),
+    ),
+    "BatchCoHiRF-DBSCAN": (
+        BatchCoHiRF,
+        dict(
+            cohirf_model=BaseCoHiRF,
+            cohirf_kwargs=dict(base_model=DBSCAN),
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
+                repetitions=optuna.distributions.IntDistribution(1, 10),
+                base_model_kwargs=dict(
+                    eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                    min_samples=optuna.distributions.IntDistribution(2, 50),
+                ),
+            )
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=0.3,
+                repetitions=5,
+                base_model_kwargs=dict(
+                    eps=0.5,
+                    min_samples=5,
+                ),
+            )
+        ),
+    ),
+    "BatchCoHiRF-DBSCAN-1iter": (
+        BatchCoHiRF,
+        dict(
+            cohirf_model=BaseCoHiRF,
+            cohirf_kwargs=dict(base_model=DBSCAN, max_iter=1),
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
+                repetitions=optuna.distributions.IntDistribution(1, 10),
+                base_model_kwargs=dict(
+                    eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                    min_samples=optuna.distributions.IntDistribution(2, 50),
+                ),
+            )
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                n_features=0.3,
+                repetitions=5,
+                base_model_kwargs=dict(
+                    eps=0.5,
+                    min_samples=5,
+                ),
+            )
         ),
     ),
     Clique.__name__: (
@@ -112,7 +203,12 @@ models_dict = {
         ),
     ),
     KMeans.__name__: (KMeans, dict(), dict(n_clusters=optuna.distributions.IntDistribution(2, 30)), dict(n_clusters=8)),
-    OPTICS.__name__: (OPTICS, dict(), dict(min_samples=optuna.distributions.IntDistribution(2, 50)), dict(min_samples=5)),
+    OPTICS.__name__: (
+        OPTICS,
+        dict(),
+        dict(min_samples=optuna.distributions.IntDistribution(2, 50)),
+        dict(min_samples=5),
+    ),
     DBSCAN.__name__: (
         DBSCAN,
         dict(),

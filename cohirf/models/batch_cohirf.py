@@ -14,7 +14,7 @@ class BatchCoHiRF:
         cohirf_kwargs: Optional[dict] = None,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
         batch_size: int = 1000,
-        max_epochs: int = 10,
+        max_epochs: int = 100,
         verbose: bool = False,
         n_jobs: int = 1,
         automatically_get_labels: bool = True,
