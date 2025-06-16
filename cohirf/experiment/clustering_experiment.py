@@ -10,10 +10,9 @@ from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score,
                              normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score,
                              calinski_harabasz_score, davies_bouldin_score)
 from sklearn.metrics.pairwise import euclidean_distances
-
-
 from ml_experiments.base_experiment import BaseExperiment
 from cohirf.experiment.tested_models import models_dict
+from ml_experiments.utils import update_recursively
 
 
 def inertia_score(X, y):
@@ -85,7 +84,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         random.seed(seed_model)
         np.random.seed(seed_model)
         model_class, model_default_params, _, _ = deepcopy(self.models_dict[model_nickname])
-        model_default_params.update(model_params)
+        model_default_params = update_recursively(model_default_params, model_params)
         model = model_class(**model_default_params)
         if hasattr(model, 'n_jobs'):
             n_jobs = model_params.get('n_jobs', n_jobs)
