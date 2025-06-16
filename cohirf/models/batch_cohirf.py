@@ -1,13 +1,14 @@
 import numpy as np
 import pandas as pd
 from typing import Literal, Optional
+from sklearn.base import BaseEstimator, ClusterMixin
 from cohirf.models.cohirf import BaseCoHiRF, CoHiRF, update_labels, get_labels_from_parents
 from joblib import Parallel, delayed
 import dask.array as da
 import dask.dataframe as dd
 
 
-class BatchCoHiRF:
+class BaseCoHiRF(ClusterMixin, BaseEstimator):
     def __init__(
         self,
         cohirf_model: type[BaseCoHiRF] = CoHiRF,
