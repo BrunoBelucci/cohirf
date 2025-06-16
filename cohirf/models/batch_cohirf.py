@@ -8,10 +8,11 @@ import dask.array as da
 import dask.dataframe as dd
 
 
-class BaseCoHiRF(ClusterMixin, BaseEstimator):
+class BatchCoHiRF(ClusterMixin, BaseEstimator):
+
     def __init__(
         self,
-        cohirf_model: type[BaseCoHiRF] = CoHiRF,
+        cohirf_model: type[BaseCoHiRF] = BaseCoHiRF,
         cohirf_kwargs: Optional[dict] = None,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
         batch_size: int = 1000,
