@@ -1,4 +1,3 @@
-import random
 from copy import deepcopy
 from abc import ABC
 from typing import Optional
@@ -10,9 +9,11 @@ from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score,
                              normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score,
                              calinski_harabasz_score, davies_bouldin_score)
 from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.base import BaseEstimator
 from ml_experiments.base_experiment import BaseExperiment
 from cohirf.experiment.tested_models import models_dict
-from ml_experiments.utils import update_recursively
+from ml_experiments.utils import update_recursively, profile_memory, profile_time
+import json
 
 
 def inertia_score(X, y):
@@ -57,37 +58,72 @@ class ClusteringExperiment(BaseExperiment, ABC):
     def __init__(
             self,
             *args,
+            model: Optional[str | BaseEstimator | type[BaseEstimator] | list[str]] = None,
+            model_params: Optional[dict] = None,
+            seed_model: int | list[int] = 0,
+            n_jobs: int = 1,
             clean_data_dir: Optional[bool] = True,
             **kwargs
     ):
         super().__init__(*args, **kwargs)
+        self.model = model
+        self.model_params = model_params if model_params is not None else {}
+        self.seed_model = seed_model
+        self.n_jobs = n_jobs
         self.clean_data_dir = clean_data_dir
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
+        if self.parser is None:
+            raise ValueError("Parser is not initialized.")
+        self.parser.add_argument('--model', type=str, nargs='+', help='Model to use for clustering.')
+        self.parser.add_argument('--model_params', type=json.loads, default=self.model_params, help='Parameters for the model.')
+        self.parser.add_argument('--seed_model', type=int, nargs='*', default=self.seed_model, help='Random seed for model initialization.')
+        self.parser.add_argument('--n_jobs', type=int, default=self.n_jobs, help='n_jobs for models.')
         self.parser.add_argument('--do_not_clean_data_dir', action='store_true')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.clean_data_dir = not args.do_not_clean_data_dir
+        self.model = args.model
+        self.n_jobs = args.n_jobs
         return args
+
+    def _get_combinations_names(self) -> list[str]:
+        combination_names = super()._get_combinations_names()
+        combination_names.extend(['model', 'seed_model'])
+        return combination_names
+
+    def _get_unique_params(self):
+        unique_params = super()._get_unique_params()
+        unique_params['n_jobs'] = self.n_jobs
+        unique_params['model_params'] = self.model_params
+        return unique_params
+
+    def _get_extra_params(self):
+        return super()._get_extra_params()
 
     @property
     def models_dict(self):
         return models_dict.copy()
 
-    def _load_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
-        model_nickname = combination['model_nickname']
+    def _load_model(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
+        model = combination['model']
         seed_model = combination['seed_model']
-        model_params = combination['model_params']
-        n_jobs = extra_params.get('n_jobs', self.n_jobs)
-        random.seed(seed_model)
-        np.random.seed(seed_model)
-        model_class, model_default_params, _, _ = deepcopy(self.models_dict[model_nickname])
-        model_default_params = update_recursively(model_default_params, model_params)
-        model = model_class(**model_default_params)
+        n_jobs = unique_params['n_jobs']
+        model_params = unique_params['model_params']
+        if isinstance(model, str):
+            model_class, model_default_params, _, _ = deepcopy(self.models_dict[model])
+            model_default_params = update_recursively(model_default_params, model_params)
+            model = model_class(**model_default_params)
+        elif isinstance(model, type):
+            model = model(**model_params)
+        else:
+            model = deepcopy(model)
+            model.set_params(**model_params)
         if hasattr(model, 'n_jobs'):
-            n_jobs = model_params.get('n_jobs', n_jobs)
             model.set_params(n_jobs=n_jobs)
         if hasattr(model, 'random_state'):
             model.set_params(random_state=seed_model)
@@ -95,7 +131,9 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'model': model,
         }
 
-    def _get_metrics(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+    def _get_metrics(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
         scores = {
             'rand_score': rand_score,
             'adjusted_rand': adjusted_rand_score,
@@ -110,13 +148,21 @@ class ClusteringExperiment(BaseExperiment, ABC):
         }
         return scores
 
-    def _fit_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+    @profile_time(enable_based_on_attribute="profile_time")
+    @profile_memory(enable_based_on_attribute="profile_memory")
+    def _fit_model(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
         model = kwargs['load_model_return']['model']
         X = kwargs['load_data_return']['X']
         y_pred = model.fit_predict(X)
         return {'y_pred': y_pred}
 
-    def _evaluate_model(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+    @profile_time(enable_based_on_attribute="profile_time")
+    @profile_memory(enable_based_on_attribute="profile_memory")
+    def _evaluate_model(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
         scores = kwargs['get_metrics_return']
         X = kwargs['load_data_return']['X']
         y_true = kwargs['load_data_return']['y']
@@ -162,32 +208,17 @@ class ClusteringExperiment(BaseExperiment, ABC):
                                               extra_params=extra_params, mlflow_run_id=mlflow_run_id, **kwargs)
 
         log_params = {}
-        log_metrics = {}
 
         load_data_return = kwargs.get('load_data_return', {})
         if 'dataset_name' in load_data_return:
             log_params['dataset_name'] = load_data_return['dataset_name']
 
-        model_nickname = combination.get('model_nickname', None)
-        if model_nickname == 'RecursiveClustering':
-            load_model_return = kwargs.get('load_model_return', {})
-            model = load_model_return.get('model', None)
-            if model is not None:
-                n_iter_ = model.n_iter_
-                if n_iter_ is not None:
-                    log_metrics['n_iter_'] = n_iter_
-                n_clusters_iter_ = model.n_clusters_iter_
-                for i, n_clusters in enumerate(n_clusters_iter_):
-                    mlflow.log_metrics({'n_clusters_iter_': n_clusters}, step=i, run_id=mlflow_run_id)
-
-        evaluate_model_return = kwargs.get('evaluate_model_return', {})
-        log_metrics.update(evaluate_model_return)
-
         mlflow.log_params(log_params, run_id=mlflow_run_id)
-        mlflow.log_metrics(log_metrics, run_id=mlflow_run_id)
 
-    def _on_exception_or_train_end(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
-        result = super()._on_exception_or_train_end(combination=combination, unique_params=unique_params,
+    def _on_exception_or_train_end(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
+        result = super()._on_exception_or_train_end(combination=combination, unique_params=unique_params, mlflow_run_id=mlflow_run_id,
                                                     extra_params=extra_params, **kwargs)
         dataset_name = kwargs.get('load_data_return', {}).get('dataset_name', None)
         if dataset_name is not None:
