@@ -14,114 +14,88 @@ from sklearn.cluster import DBSCAN
 
 models_dict = default_models_dict.copy()
 models_dict.update(
-	{
-		CoHiRF.__name__: (
-			CoHiRF,
-			dict(n_features=4),
-			dict(
-				repetitions=optuna.distributions.IntDistribution(2, 10),
-				kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
-			),
-			[dict(
-				repetitions=5,
-				kmeans_n_clusters=3,
-			)],
-		),
-		"CoHiRF-DBSCAN": (
-			BaseCoHiRF,
-			dict(base_model=DBSCAN, n_features=4, repetitions=1),
-			dict(
-				base_model_kwargs=dict(
-					eps=optuna.distributions.FloatDistribution(1e-1, 10),
-					min_samples=optuna.distributions.IntDistribution(2, 50),
-				),
-			),
-			[dict(
-				base_model_kwargs=dict(
-					eps=0.5,
-					min_samples=5,
-				),
-			)],
-		),
-		"BatchCoHiRF": (
-			BatchCoHiRF,
-			dict(cohirf_kwargs=dict(n_features=4)),
-			dict(
-				cohirf_kwargs=dict(
-					repetitions=optuna.distributions.IntDistribution(2, 10),
-					kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
-				)
-			),
-			[dict(
-				cohirf_kwargs=dict(
-					repetitions=5,
-					kmeans_n_clusters=3,
-				)
-			)],
-		),
-		"BatchCoHiRF-1iter": (
-			BatchCoHiRF,
-			dict(cohirf_kwargs=dict(max_iter=1, n_features=4)),
-			dict(
-				cohirf_kwargs=dict(
-					repetitions=optuna.distributions.IntDistribution(2, 10),
-					kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
-				)
-			),
-			[dict(
-				cohirf_kwargs=dict(
-					repetitions=5,
-					kmeans_n_clusters=3,
-				)
-			)],
-		),
-		"BatchCoHiRF-DBSCAN": (
-			BatchCoHiRF,
-			dict(
-				cohirf_model=BaseCoHiRF,
-				cohirf_kwargs=dict(base_model=DBSCAN, n_features=4, repetitions=1),
-			),
-			dict(
-				cohirf_kwargs=dict(
-					base_model_kwargs=dict(
-						eps=optuna.distributions.FloatDistribution(1e-1, 10),
-						min_samples=optuna.distributions.IntDistribution(2, 50),
-					),
-				)
-			),
-			[dict(
-				cohirf_kwargs=dict(
-					base_model_kwargs=dict(
-						eps=0.5,
-						min_samples=5,
-					),
-				)
-			)],
-		),
-		"BatchCoHiRF-DBSCAN-1iter": (
-			BatchCoHiRF,
-			dict(
-				cohirf_model=BaseCoHiRF,
-				cohirf_kwargs=dict(base_model=DBSCAN, max_iter=1, n_features=4, repetitions=1),
-			),
-			dict(
-				cohirf_kwargs=dict(
-					base_model_kwargs=dict(
-						eps=optuna.distributions.FloatDistribution(1e-1, 10),
-						min_samples=optuna.distributions.IntDistribution(2, 50),
-					),
-				)
-			),
-			[dict(
-				cohirf_kwargs=dict(
-					base_model_kwargs=dict(
-						eps=0.5,
-						min_samples=5,
-					),
-				)
-			)],
-		),
-	}
+    {
+        "CoHiRF-DBSCAN": (
+            BaseCoHiRF,
+            dict(base_model=DBSCAN, n_features=4, repetitions=1, n_samples_representative=1000),
+            dict(
+                base_model_kwargs=dict(
+                    eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                    min_samples=optuna.distributions.IntDistribution(2, 50),
+                ),
+            ),
+            [
+                dict(
+                    base_model_kwargs=dict(
+                        eps=0.5,
+                        min_samples=5,
+                    ),
+                )
+            ],
+        ),
+        "BatchCoHiRF-DBSCAN": (
+            BatchCoHiRF,
+            dict(
+                cohirf_model=BaseCoHiRF,
+                base_model=DBSCAN,
+                max_iter=1,
+                n_features=4,
+                repetitions=1,
+                n_samples_representative=1000,
+                n_batches=10,
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                        min_samples=optuna.distributions.IntDistribution(2, 50),
+                    ),
+                )
+            ),
+            [
+                dict(
+                    cohirf_kwargs=dict(
+                        base_model_kwargs=dict(
+                            eps=0.5,
+                            min_samples=5,
+                        ),
+                    )
+                )
+            ],
+        ),
+        "BatchCoHiRF-DBSCAN-1iter": (
+            BatchCoHiRF,
+            dict(
+                cohirf_model=BaseCoHiRF,
+                cohirf_kwargs=dict(
+                    base_model=DBSCAN,
+                    max_iter=1,
+                    n_features=4,
+                    repetitions=1,
+                    n_samples_representative=1000,
+                    n_batches=10,
+                ),
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        eps=optuna.distributions.FloatDistribution(1e-1, 10),
+                        min_samples=optuna.distributions.IntDistribution(2, 50),
+                    ),
+                )
+            ),
+            [
+                dict(
+                    cohirf_kwargs=dict(
+                        base_model_kwargs=dict(
+                            eps=0.5,
+                            min_samples=5,
+                        ),
+                    )
+                )
+            ],
+        ),
+    }
 )
 
 
