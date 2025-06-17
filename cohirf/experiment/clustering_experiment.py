@@ -143,8 +143,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'homogeneity_completeness_v_measure': homogeneity_completeness_v_measure,
             'silhouette': partial(silhouette_score, sample_size=1000),
             'calinski_harabasz_score': calinski_harabasz_score,
-            'davies_bouldin_score': davies_bouldin_score,
-            'inertia_score': inertia_score,
+            # 'davies_bouldin_score': davies_bouldin_score,
+            # 'inertia_score': inertia_score,
         }
         return scores
 
@@ -167,7 +167,10 @@ class ClusteringExperiment(BaseExperiment, ABC):
         X = kwargs['load_data_return']['X']
         y_true = kwargs['load_data_return']['y']
         y_pred = kwargs['fit_model_return']['y_pred']
-        results = {'n_clusters_': len(np.unique(y_pred))}
+        n_clusters = len(np.unique(y_pred))
+        results = {"n_clusters_": n_clusters}
+        if n_clusters > 0.5 * X.shape[0]:
+            return results  # Avoid calculating scores if too many clusters (they are probably not meaningful)
         for score_name, score_fn in scores.items():
             if callable(score_fn):
                 if score_name == 'homogeneity_completeness_v_measure':
