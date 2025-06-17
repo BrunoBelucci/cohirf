@@ -108,6 +108,8 @@ class HPOClusteringExperiment(HPOExperiment):
             results = dict()
 
         keep_results = results.get("evaluate_model_return", {})
+        fit_model_return_elapsed_time = results.get("fit_model_return", {}).get("elapsed_time", None)
+        keep_results["elapsed_time"] = fit_model_return_elapsed_time
 
         if mlflow_run_id is not None:
             log_metrics = keep_results.copy()
