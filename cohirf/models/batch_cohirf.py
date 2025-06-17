@@ -15,7 +15,8 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         cohirf_model: type[BaseCoHiRF] = BaseCoHiRF,
         cohirf_kwargs: Optional[dict] = None,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
-        batch_size: int = 1000,
+        batch_size: Optional[int] = None,
+        n_batches: int = 10,
         max_epochs: int = 100,
         verbose: bool = False,
         n_jobs: int = 1,
@@ -25,6 +26,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
         self.hierarchy_strategy = hierarchy_strategy
         self.batch_size = batch_size
+        self.n_batches = n_batches
         self.max_epochs = max_epochs
         self.verbose = verbose
         self.n_jobs = n_jobs
@@ -176,10 +178,19 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         elif isinstance(X, dd.DataFrame):
             X = X.to_dask_array(lengths=(self.batch_size, -1))
 
+        n_samples = X.shape[0]
+        
+        if self.batch_size is None:
+            # we will use self.n_batches to determine the batch size
+            self.batch_size = n_samples // self.n_batches
+            if self.batch_size == 0:
+                raise ValueError(
+                    "The number of samples is less than the number of batches. Please increase the number of samples "
+                    "or decrease the number of batches."
+                )
+
         if isinstance(X, da.Array):
             X = da.rechunk(X, (self.batch_size, -1))  # rechunk to have batches of size batch_size
-
-        n_samples = X.shape[0]
 
         if representatives_indexes is None:
             # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
