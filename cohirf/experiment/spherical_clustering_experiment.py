@@ -37,12 +37,14 @@ models_dict.update(
             BatchCoHiRF,
             dict(
                 cohirf_model=BaseCoHiRF,
-                base_model=DBSCAN,
-                max_iter=1,
-                n_features=4,
-                repetitions=1,
-                n_samples_representative=1000,
-                n_batches=10,
+                cohirf_kwargs=dict(
+                    base_model=DBSCAN,
+                    max_iter=1,
+                    n_features=4,
+                    repetitions=1,
+                    n_samples_representative=1000,
+                    n_batches=10,
+                ),
             ),
             dict(
                 cohirf_kwargs=dict(

@@ -25,11 +25,11 @@ models_dict.update(
                 repetitions=optuna.distributions.IntDistribution(2, 10),
                 kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
             ),
-            dict(
+            [dict(
                 n_features=0.3,
                 repetitions=5,
                 kmeans_n_clusters=3,
-            ),
+            ),]
         ),
         "CoHiRF-DBSCAN": (
             BaseCoHiRF,
@@ -42,14 +42,14 @@ models_dict.update(
                     min_samples=optuna.distributions.IntDistribution(2, 50),
                 ),
             ),
-            dict(
+            [dict(
                 n_features=0.3,
                 repetitions=5,
                 base_model_kwargs=dict(
                     eps=0.5,
                     min_samples=5,
                 ),
-            ),
+            ),]
         ),
         "BatchCoHiRF": (
             BatchCoHiRF,
@@ -61,13 +61,13 @@ models_dict.update(
                     kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
                 )
             ),
-            dict(
+            [dict(
                 cohirf_kwargs=dict(
                     n_features=0.3,
                     repetitions=5,
                     kmeans_n_clusters=3,
                 )
-            ),
+            ),]
         ),
         "BatchCoHiRF-1iter": (
             BatchCoHiRF,
@@ -79,13 +79,13 @@ models_dict.update(
                     kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
                 )
             ),
-            dict(
+            [dict(
                 cohirf_kwargs=dict(
                     n_features=0.3,
                     repetitions=5,
                     kmeans_n_clusters=3,
                 )
-            ),
+            ),]
         ),
         "BatchCoHiRF-DBSCAN": (
             BatchCoHiRF,
@@ -103,7 +103,7 @@ models_dict.update(
                     ),
                 )
             ),
-            dict(
+            [dict(
                 cohirf_kwargs=dict(
                     n_features=0.3,
                     repetitions=5,
@@ -112,7 +112,7 @@ models_dict.update(
                         min_samples=5,
                     ),
                 )
-            ),
+            ),]
         ),
         "BatchCoHiRF-DBSCAN-1iter": (
             BatchCoHiRF,
@@ -130,7 +130,7 @@ models_dict.update(
                     ),
                 )
             ),
-            dict(
+            [dict(
                 cohirf_kwargs=dict(
                     n_features=0.3,
                     repetitions=5,
@@ -139,7 +139,7 @@ models_dict.update(
                         min_samples=5,
                     ),
                 )
-            ),
+            ),]
         ),
     }
 )
