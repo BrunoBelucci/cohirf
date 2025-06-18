@@ -172,20 +172,20 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         super()._add_arguments_to_parser()
         if self.parser is None:
             raise ValueError('Parser must be set before calling _add_arguments_to_parser')
-        self.parser.add_argument('--datasets_ids', type=int, nargs='*', default=self.dataset_id)
-        self.parser.add_argument('--task_ids', type=int, nargs='*', default=self.task_id)
-        self.parser.add_argument('--task_repeats', type=int, nargs='*', default=self.task_repeat)
-        self.parser.add_argument('--task_folds', type=int, nargs='*', default=self.task_fold)
-        self.parser.add_argument('--task_samples', type=int, nargs='*', default=self.task_sample)
+        self.parser.add_argument('--dataset_id', type=int, nargs='*', default=self.dataset_id)
+        self.parser.add_argument('--task_id', type=int, nargs='*', default=self.task_id)
+        self.parser.add_argument('--task_repeat', type=int, nargs='*', default=self.task_repeat)
+        self.parser.add_argument('--task_fold', type=int, nargs='*', default=self.task_fold)
+        self.parser.add_argument('--task_sample', type=int, nargs='*', default=self.task_sample)
         self.parser.add_argument('--standardize', action='store_true', default=self.standardize)
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
-        self.dataset_id = args.datasets_ids
-        self.task_id = args.task_ids
-        self.task_repeat = args.task_repeats
-        self.task_fold = args.task_folds
-        self.task_sample = args.task_samples
+        self.dataset_id = args.dataset_id
+        self.task_id = args.task_id
+        self.task_repeat = args.task_repeat
+        self.task_fold = args.task_fold
+        self.task_sample = args.task_sample
         self.standardize = args.standardize
         return args
 
@@ -278,7 +278,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         if mlflow_run_id is not None:
             mlflow.log_params({
                 'n_samples': X.shape[0],
-                'n_features': X.shape[1],
+                'n_features_dataset': X.shape[1],
                 'n_classes': n_classes,
             }, run_id=mlflow_run_id)
         return {
