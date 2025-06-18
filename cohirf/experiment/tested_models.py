@@ -35,17 +35,17 @@ models_dict = {
             base_model=KMeans,
             transform_method=RBFSampler,
             transform_kwargs=dict(n_components=500),
-			representative_method='rbf',
+            representative_method="rbf",
         ),
         dict(
             n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
             repetitions=optuna.distributions.IntDistribution(2, 10),
-			base_model_kwargs=dict(
-				n_clusters=optuna.distributions.IntDistribution(2, 5),
+            base_model_kwargs=dict(
+                n_clusters=optuna.distributions.IntDistribution(2, 5),
             ),
-			transform_kwargs=dict(
-				gamma=optuna.distributions.FloatDistribution(0.1, 30),
-            )
+            transform_kwargs=dict(
+                gamma=optuna.distributions.FloatDistribution(0.1, 30),
+            ),
         ),
         [
             dict(
@@ -175,6 +175,35 @@ models_dict = {
                     base_model_kwargs=dict(
                         eps=0.5,
                         min_samples=5,
+                    ),
+                )
+            )
+        ],
+    ),
+    "BatchCoHiRF-SC-SRGF": (
+        BatchCoHiRF,
+        dict(
+            cohirf_model=BaseCoHiRF,
+            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, max_iter=1, n_features=1.0),
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                repetitions=optuna.distributions.IntDistribution(2, 10),
+                base_model_kwargs=dict(
+                    n_similarities=optuna.distributions.IntDistribution(10, 30),
+                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                    sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
+                ),
+            )
+        ),
+        [
+            dict(
+                cohirf_kwargs=dict(
+                    repetitions=5,
+                    base_model_kwargs=dict(
+                        n_similarities=20,
+                        sampling_ratio=0.5,
+                        sc_n_clusters=3,
                     ),
                 )
             )
