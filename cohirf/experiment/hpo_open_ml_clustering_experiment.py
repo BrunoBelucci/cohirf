@@ -1,29 +1,38 @@
 import argparse
 from typing import Optional
 import openml
-from ml_experiments.hpo_experiment import HPOExperiment
 from cohirf.experiment.open_ml_clustering_experiment import OpenmlClusteringExperiment
+from cohirf.experiment.hpo_clustering_experiment import HPOClusteringExperiment
 import pandas as pd
 
 
-class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
-    def get_hyperband_max_resources(self, combination: dict, unique_params: Optional[dict] = None,
-                                    extra_params: Optional[dict] = None, **kwargs):
-        raise NotImplementedError('Hyperband is not available for this experiment')
+class HPOOpenmlClusteringExperiment(HPOClusteringExperiment, OpenmlClusteringExperiment):
 
-    def _load_single_experiment(self, combination: dict, unique_params: Optional[dict] = None,
-                                extra_params: Optional[dict] = None, **kwargs):
-        openml_clustering_experiment = OpenmlClusteringExperiment(
+    def _load_simple_experiment(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
+    ):
+        experiment = OpenmlClusteringExperiment(
             # experiment parameters
-            experiment_name=self.experiment_name, create_validation_set=self.create_validation_set,
-            log_dir=self.log_dir, log_file_name=self.log_file_name, work_root_dir=self.work_root_dir,
-            save_root_dir=self.save_root_dir, clean_work_dir=self.clean_work_dir,
-            raise_on_fit_error=self.raise_on_fit_error, error_score=self.error_score, log_to_mlflow=self.log_to_mlflow,
-            mlflow_tracking_uri=self.mlflow_tracking_uri, check_if_exists=self.check_if_exists, verbose=0
+            experiment_name=self.experiment_name,
+            log_dir=self.log_dir,
+            log_file_name=self.log_file_name,
+            work_root_dir=self.work_root_dir,
+            save_root_dir=self.save_root_dir,
+            clean_work_dir=self.clean_work_dir,
+            clean_data_dir=False,
+            raise_on_error=self.raise_on_error,
+            log_to_mlflow=self.log_to_mlflow,
+            mlflow_tracking_uri=self.mlflow_tracking_uri,
+            check_if_exists=self.check_if_exists,
+            profile_memory=self.profile_memory,
+            profile_time=self.profile_time,
+            verbose=0,
         )
-        return openml_clustering_experiment
+        return experiment
 
-    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+    def _load_data(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
         dataset_id = combination['dataset_id']
         task_id = combination['task_id']
         task_repeat = combination['task_repeat']
@@ -61,6 +70,5 @@ class HPOOpenmlClusteringExperiment(HPOExperiment, OpenmlClusteringExperiment):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    experiment = HPOOpenmlClusteringExperiment(parser=parser)
-    experiment.run()
+    experiment = HPOOpenmlClusteringExperiment()
+    experiment.run_from_cli()

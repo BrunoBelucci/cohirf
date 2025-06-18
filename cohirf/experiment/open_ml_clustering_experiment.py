@@ -148,24 +148,20 @@ models_dict.update(
 class OpenmlClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
-            datasets_ids: Optional[list[int]] = None,
-            task_ids: Optional[list[int]] = None,
-            task_repeats: Optional[list[int]] = None,
-            task_folds: Optional[list[int]] = None,
-            task_samples: Optional[list[int]] = None,
+            dataset_id: Optional[int | list[int]] = None,
+            task_id: Optional[int | list[int]] = None,
+            task_repeat: int | list[int] = 0,
+            task_fold: int | list[int] = 0,
+            task_sample: int | list[int] = 0,
             standardize: bool = False,
             **kwargs
     ):
         super().__init__(**kwargs)
-        if isinstance(datasets_ids, int) or datasets_ids is None:
-            datasets_ids = [datasets_ids]  # type: ignore
-        if isinstance(task_ids, int) or task_ids is None:
-            task_ids = [task_ids]  # type: ignore
-        self.datasets_ids = datasets_ids
-        self.task_ids = task_ids
-        self.task_repeats = task_repeats if task_repeats else [0]
-        self.task_folds = task_folds if task_folds else [0]
-        self.task_samples = task_samples if task_samples else [0]
+        self.dataset_id = dataset_id
+        self.task_id = task_id
+        self.task_repeat = task_repeat if task_repeat else [0]
+        self.task_fold = task_fold if task_fold else [0]
+        self.task_sample = task_sample if task_sample else [0]
         self.standardize = standardize
 
     @property
@@ -174,24 +170,44 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
-        self.parser.add_argument('--datasets_ids', type=int, nargs='*', default=self.datasets_ids)
-        self.parser.add_argument('--task_ids', type=int, nargs='*', default=self.task_ids)
-        self.parser.add_argument('--task_repeats', type=int, nargs='*', default=self.task_repeats)
-        self.parser.add_argument('--task_folds', type=int, nargs='*', default=self.task_folds)
-        self.parser.add_argument('--task_samples', type=int, nargs='*', default=self.task_samples)
+        if self.parser is None:
+            raise ValueError('Parser must be set before calling _add_arguments_to_parser')
+        self.parser.add_argument('--datasets_ids', type=int, nargs='*', default=self.dataset_id)
+        self.parser.add_argument('--task_ids', type=int, nargs='*', default=self.task_id)
+        self.parser.add_argument('--task_repeats', type=int, nargs='*', default=self.task_repeat)
+        self.parser.add_argument('--task_folds', type=int, nargs='*', default=self.task_fold)
+        self.parser.add_argument('--task_samples', type=int, nargs='*', default=self.task_sample)
         self.parser.add_argument('--standardize', action='store_true', default=self.standardize)
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
-        self.datasets_ids = args.datasets_ids
-        self.task_ids = args.task_ids
-        self.task_repeats = args.task_repeats
-        self.task_folds = args.task_folds
-        self.task_samples = args.task_samples
+        self.dataset_id = args.datasets_ids
+        self.task_id = args.task_ids
+        self.task_repeat = args.task_repeats
+        self.task_fold = args.task_folds
+        self.task_sample = args.task_samples
         self.standardize = args.standardize
         return args
 
-    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+    def _get_combinations_names(self) -> list[str]:
+        combination_names = super()._get_combinations_names()
+        combination_names.extend([
+            'dataset_id',
+            'task_id',
+            'task_repeat',
+            'task_fold',
+            'task_sample',
+        ])
+        return combination_names
+
+    def _get_unique_params(self):
+        unique_params = super()._get_unique_params()
+        unique_params['standardize'] = self.standardize
+        return unique_params
+
+    def _load_data(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
         dataset_id = combination['dataset_id']
         task_id = combination['task_id']
         task_repeat = combination['task_repeat']
@@ -259,7 +275,6 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         X = X.dropna(axis=1, how='all')
 
         # log to mlflow to facilitate analysis
-        mlflow_run_id = extra_params.get('mlflow_run_id', None)
         if mlflow_run_id is not None:
             mlflow.log_params({
                 'n_samples': X.shape[0],
@@ -277,76 +292,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             'dataset_name': dataset_name
         }
 
-    def _get_combinations(self):
-        combination_names = ['model_nickname', 'seed_model', 'dataset_id', 'task_id', 'task_repeat', 'task_fold',
-                             'task_sample']
-        if self.combinations is None:
-            if not isinstance(self.datasets_ids, list):
-                raise ValueError('datasets_ids must be a list')
-            if not isinstance(self.task_ids, list):
-                raise ValueError('task_ids must be a list')
-            if not isinstance(self.task_repeats, list):
-                raise ValueError('task_repeats must be a list')
-            if not isinstance(self.task_folds, list):
-                raise ValueError('task_folds must be a list')
-            if not isinstance(self.task_samples, list):
-                raise ValueError('task_samples must be a list')
-            combinations = list(product(self.models_nickname, self.seeds_models, self.datasets_ids, self.task_ids,
-                                        self.task_repeats, self.task_folds, self.task_samples))
-        else:
-            combinations = self.combinations
-            # ensure that combinations have at least the same length as combination_names
-            for combination in combinations:
-                if len(combination) != len(combination_names):
-                    raise ValueError(f'Combination {combination} does not have the same length as combination_names '
-                                     f'{combination_names}')
-        combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
-                        for combination in combinations]
-        combination_names += ['model_params', 'fit_params']
-        unique_params = dict(standardize=self.standardize)
-        extra_params = dict(n_jobs=self.n_jobs, return_results=False, timeout_combination=self.timeout_combination,
-                            timeout_fit=self.timeout_fit)
-        return combinations, combination_names, unique_params, extra_params
-
-    def run_openml_experiment_combination(
-            self, model_nickname: str, dataset_id: int, task_id: int, task_repeat: int = 0, task_fold: int = 0,
-            task_sample: int = 0,
-            seed_model: int = 0, model_params: Optional[dict] = None,
-            fit_params: Optional[dict] = None, standardize: bool = False,
-            n_jobs: int = 1, return_results: bool = True,
-            log_to_mlflow: bool = False,
-            timeout_combination: Optional[int] = None, timeout_fit: Optional[int] = None,
-    ):
-
-        combination = {
-            'model_nickname': model_nickname,
-            'seed_model': seed_model,
-            'dataset_id': dataset_id,
-            'task_id': task_id,
-            'task_repeat': task_repeat,
-            'task_fold': task_fold,
-            'task_sample': task_sample,
-            'model_params': model_params,
-            'fit_params': fit_params,
-        }
-        unique_params = {
-            'standardize': standardize,
-        }
-        extra_params = {
-            'n_jobs': n_jobs,
-            'return_results': return_results,
-            'timeout_combination': timeout_combination,
-            'timeout_fit': timeout_fit,
-        }
-        if log_to_mlflow:
-            return self._run_mlflow_and_train_model(combination=combination, unique_params=unique_params,
-                                                    extra_params=extra_params, return_results=return_results)
-        else:
-            return self._train_model(combination=combination, unique_params=unique_params, extra_params=extra_params,
-                                     return_results=return_results)
-
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    experiment = OpenmlClusteringExperiment(parser=parser)
-    experiment.run()
+    experiment = OpenmlClusteringExperiment()
+    experiment.run_from_cli()
