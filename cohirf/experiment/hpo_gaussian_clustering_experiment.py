@@ -15,7 +15,7 @@ class HPOGaussianClusteringExperiment(HPOExperiment, GaussianClusteringExperimen
             experiment_name=self.experiment_name, create_validation_set=self.create_validation_set,
             log_dir=self.log_dir, log_file_name=self.log_file_name, work_root_dir=self.work_root_dir,
             save_root_dir=self.save_root_dir, clean_work_dir=self.clean_work_dir, clean_data_dir=False,
-            raise_on_fit_error=self.raise_on_fit_error, error_score=self.error_score, log_to_mlflow=self.log_to_mlflow,
+            raise_on_fit_error=self.raise_on_fit_error, error_score=self.error_score, 
             mlflow_tracking_uri=self.mlflow_tracking_uri, check_if_exists=self.check_if_exists, verbose=0
         )
         return blob_clustering_experiment

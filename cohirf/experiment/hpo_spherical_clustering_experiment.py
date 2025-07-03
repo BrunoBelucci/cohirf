@@ -20,7 +20,6 @@ class HPOSphericalClusteringExperiment(HPOClusteringExperiment, SphericalCluster
             clean_work_dir=self.clean_work_dir,
             clean_data_dir=False,
             raise_on_error=self.raise_on_error,
-            log_to_mlflow=self.log_to_mlflow,
             mlflow_tracking_uri=self.mlflow_tracking_uri,
             check_if_exists=self.check_if_exists,
             profile_memory=self.profile_memory,
