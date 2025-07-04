@@ -14,6 +14,7 @@ from ml_experiments.base_experiment import BaseExperiment
 from cohirf.experiment.tested_models import models_dict
 from ml_experiments.utils import update_recursively, profile_memory, profile_time
 import json
+import os
 
 
 def inertia_score(X, y):
@@ -55,15 +56,18 @@ def inertia_score(X, y):
 
 
 class ClusteringExperiment(BaseExperiment, ABC):
+
     def __init__(
-            self,
-            *args,
-            model: Optional[str | BaseEstimator | type[BaseEstimator] | list[str]] = None,
-            model_params: Optional[dict] = None,
-            seed_model: int | list[int] = 0,
-            n_jobs: int = 1,
-            clean_data_dir: Optional[bool] = True,
-            **kwargs
+        self,
+        *args,
+        model: Optional[str | BaseEstimator | type[BaseEstimator] | list[str]] = None,
+        model_params: Optional[dict] = None,
+        seed_model: int | list[int] = 0,
+        n_jobs: int = 1,
+        clean_data_dir: Optional[bool] = True,
+        # if we set this, we will automatically set the number of threads to accomodate the number of jobs
+        max_threads: Optional[int] = None,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.model = model
@@ -71,6 +75,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.seed_model = seed_model
         self.n_jobs = n_jobs
         self.clean_data_dir = clean_data_dir
+        self.max_threads = max_threads
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
@@ -81,12 +86,16 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.parser.add_argument('--seed_model', type=int, nargs='*', default=self.seed_model, help='Random seed for model initialization.')
         self.parser.add_argument('--n_jobs', type=int, default=self.n_jobs, help='n_jobs for models.')
         self.parser.add_argument('--do_not_clean_data_dir', action='store_true')
+        self.parser.add_argument('--max_threads', type=int, default=self.max_threads, help='Maximum number of threads to use across all jobs.')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.clean_data_dir = not args.do_not_clean_data_dir
         self.model = args.model
         self.n_jobs = args.n_jobs
+        self.model_params = args.model_params
+        self.seed_model = args.seed_model
+        self.max_threads = args.max_threads
         return args
 
     def _get_combinations_names(self) -> list[str]:
@@ -98,6 +107,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         unique_params = super()._get_unique_params()
         unique_params['n_jobs'] = self.n_jobs
         unique_params['model_params'] = self.model_params
+        unique_params["max_threads"] = self.max_threads
         return unique_params
 
     def _get_extra_params(self):
@@ -114,6 +124,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         seed_model = combination['seed_model']
         n_jobs = unique_params['n_jobs']
         model_params = unique_params['model_params']
+        max_threads = unique_params["max_threads"]
         if isinstance(model, str):
             model_class, model_default_params, _, _ = deepcopy(self.models_dict[model])
             model_default_params = update_recursively(model_default_params, model_params)
@@ -124,6 +135,11 @@ class ClusteringExperiment(BaseExperiment, ABC):
             model = deepcopy(model)
             model.set_params(**model_params)
         if hasattr(model, 'n_jobs'):
+            if max_threads is not None:
+                threads_per_process = max(1, max_threads // n_jobs)
+                # Set environment variables
+                for var in ['OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS']:
+                    os.environ[var] = str(threads_per_process)
             model.set_params(n_jobs=n_jobs)
         if hasattr(model, 'random_state'):
             model.set_params(random_state=seed_model)
