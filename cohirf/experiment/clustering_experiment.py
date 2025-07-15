@@ -65,6 +65,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         seed_model: int | list[int] = 0,
         n_jobs: int = 1,
         clean_data_dir: Optional[bool] = True,
+        calculate_davies_bouldin: bool = False,
+        calculate_full_silhouette: bool = False,
         # if we set this, we will automatically set the number of threads to accomodate the number of jobs
         max_threads: Optional[int] = None,
         **kwargs,
@@ -75,6 +77,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.seed_model = seed_model
         self.n_jobs = n_jobs
         self.clean_data_dir = clean_data_dir
+        self.calculate_davies_bouldin = calculate_davies_bouldin
+        self.calculate_full_silhouette = calculate_full_silhouette
         self.max_threads = max_threads
 
     def _add_arguments_to_parser(self):
@@ -86,6 +90,10 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.parser.add_argument('--seed_model', type=int, nargs='*', default=self.seed_model, help='Random seed for model initialization.')
         self.parser.add_argument('--n_jobs', type=int, default=self.n_jobs, help='n_jobs for models.')
         self.parser.add_argument('--do_not_clean_data_dir', action='store_true')
+        self.parser.add_argument('--calculate_davies_bouldin', action='store_true', default=self.calculate_davies_bouldin,
+                                help='Calculate Davies-Bouldin score.')
+        self.parser.add_argument('--calculate_full_silhouette', action='store_true', default=self.calculate_full_silhouette,
+                                help='Calculate full silhouette score (not sampled).')
         self.parser.add_argument('--max_threads', type=int, default=self.max_threads, help='Maximum number of threads to use across all jobs.')
 
     def _unpack_parser(self):
@@ -95,6 +103,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.n_jobs = args.n_jobs
         self.model_params = args.model_params
         self.seed_model = args.seed_model
+        self.calculate_davies_bouldin = args.calculate_davies_bouldin
+        self.calculate_full_silhouette = args.calculate_full_silhouette
         self.max_threads = args.max_threads
         return args
 
@@ -108,6 +118,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         unique_params['n_jobs'] = self.n_jobs
         unique_params['model_params'] = self.model_params
         unique_params["max_threads"] = self.max_threads
+        unique_params["calculate_davies_bouldin"] = self.calculate_davies_bouldin
+        unique_params["calculate_full_silhouette"] = self.calculate_full_silhouette
         return unique_params
 
     def _get_extra_params(self):
@@ -150,6 +162,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
     def _get_metrics(
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
     ):
+        calculate_davies_bouldin = unique_params["calculate_davies_bouldin"]
+        calculate_full_silhouette = unique_params["calculate_full_silhouette"]
         scores = {
             'rand_score': rand_score,
             'adjusted_rand': adjusted_rand_score,
@@ -157,11 +171,13 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'adjusted_mutual_info': adjusted_mutual_info_score,
             'normalized_mutual_info': normalized_mutual_info_score,
             'homogeneity_completeness_v_measure': homogeneity_completeness_v_measure,
-            'silhouette': partial(silhouette_score, sample_size=1000),
+            'silhouette_1000': partial(silhouette_score, sample_size=1000),
             'calinski_harabasz_score': calinski_harabasz_score,
-            # 'davies_bouldin_score': davies_bouldin_score,
-            # 'inertia_score': inertia_score,
         }
+        if calculate_davies_bouldin:
+            scores['davies_bouldin_score'] = davies_bouldin_score
+        if calculate_full_silhouette:
+            scores['silhouette'] = silhouette_score
         return scores
 
     @profile_time(enable_based_on_attribute="profile_time")
