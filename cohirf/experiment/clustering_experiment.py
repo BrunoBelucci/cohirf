@@ -210,7 +210,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
                     results['homogeneity'] = homogeneity
                     results['completeness'] = completeness
                     results['v_measure'] = v_measure
-                elif score_name == 'silhouette':
+                elif score_name == 'silhouette' or score_name == 'silhouette_1000':
                     try:
                         results['silhouette'] = score_fn(X, y_pred) # type: ignore
                     except ValueError:
