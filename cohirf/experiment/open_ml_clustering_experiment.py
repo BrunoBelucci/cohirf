@@ -16,6 +16,7 @@ from sklearn.kernel_approximation import RBFSampler
 
 
 models_dict = default_models_dict.copy()
+# n_features can be 1, so we re-declare here to change the upper limit from 0.6 to 1
 models_dict.update(
     {
         CoHiRF.__name__: (
@@ -183,6 +184,46 @@ models_dict.update(
                         ),
                     )
                 ),
+            ],
+        ),
+        "BatchCoHiRF-KernelRBF-1iter": (
+            BatchCoHiRF,
+            dict(
+                cohirf_model=BaseCoHiRF,
+                cohirf_kwargs=dict(
+                    base_model=KMeans,
+                    transform_method=RBFSampler,
+                    transform_kwargs=dict(n_components=500),
+                    representative_method="rbf",
+                    max_iter=1,
+                ),
+            ),
+            dict(
+                cohirf_kwargs=dict(
+                    n_features=optuna.distributions.FloatDistribution(0.1, 1),
+                    repetitions=optuna.distributions.IntDistribution(1, 10),
+                    base_model_kwargs=dict(
+                        n_clusters=optuna.distributions.IntDistribution(2, 5),
+                        min_samples=optuna.distributions.IntDistribution(2, 50),
+                    ),
+                    transform_kwargs=dict(
+                        gamma=optuna.distributions.FloatDistribution(0.1, 30),
+                    ),
+                )
+            ),
+            [
+                dict(
+                    cohirf_kwargs=dict(
+                        n_features=0.3,
+                        repetitions=5,
+                        base_model_kwargs=dict(
+                            n_clusters=3,
+                        ),
+                        transform_kwargs=dict(
+                            gamma=1.0,
+                        ),
+                    ),
+                )
             ],
         ),
     }
