@@ -331,8 +331,8 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         dataset_name = dataset.name
         # we will preprocess the data always in the same way
         # we first delete duplicated rows
-        X = X[~X.duplicated()]
         y = y[~X.duplicated()]
+        X = X[~X.duplicated()]
         # categorical features
         if cat_features_names:
             # we will convert categorical features to codes
