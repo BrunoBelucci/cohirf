@@ -56,6 +56,14 @@ def inertia_score(X, y):
 
 
 class ClusteringExperiment(BaseExperiment, ABC):
+    """
+    Abstract base class for clustering experiments.
+    
+    This class provides a framework for running clustering experiments with various algorithms
+    and evaluation metrics. It handles model initialization, fitting, prediction, and comprehensive
+    evaluation using multiple clustering metrics (both supervised and unsupervised). Subclasses
+    should implement data loading logic specific to their dataset type.
+    """
 
     def __init__(
         self,
@@ -71,6 +79,38 @@ class ClusteringExperiment(BaseExperiment, ABC):
         max_threads: Optional[int] = None,
         **kwargs,
     ):
+        """
+        Initialize the ClusteringExperiment.
+
+        Args:
+            *args: Variable length argument list passed to parent class.
+            model (Optional[str | BaseEstimator | type[BaseEstimator] | list[str]], optional):
+                Clustering model(s) to use. Can be:
+                - String: Model name from the models dictionary
+                - BaseEstimator: Instantiated sklearn-compatible model
+                - Type: Class of sklearn-compatible model
+                - List of strings: Multiple model names for batch processing
+                Defaults to None.
+            model_params (Optional[dict], optional): Parameters to pass to the clustering model(s).
+                Used for hyperparameter configuration. Defaults to None (empty dict).
+            seed_model (int | list[int], optional): Random seed(s) for model initialization.
+                If list, creates multiple experiments with different seeds for reproducibility.
+                Defaults to 0.
+            n_jobs (int, optional): Number of parallel jobs to use in clustering algorithms
+                that support parallelization. -1 uses all available cores. Defaults to 1.
+            clean_data_dir (Optional[bool], optional): Whether to clean the data directory
+                after the experiments. Defaults to True.
+            calculate_davies_bouldin (bool, optional): Whether to calculate the Davies-Bouldin
+                clustering validity index. Can be computationally expensive for large datasets.
+                Defaults to False.
+            calculate_full_silhouette (bool, optional): Whether to calculate the full silhouette
+                score using all samples. Can be computationally expensive for large datasets.
+                Defaults to False.
+            max_threads (Optional[int], optional): Maximum number of threads to use across all jobs.
+                Automatically adjusts threading to accommodate the number of parallel jobs.
+                Defaults to None (no limit).
+            **kwargs: Additional keyword arguments passed to parent class.
+        """
         super().__init__(*args, **kwargs)
         self.model = model
         self.model_params = model_params if model_params is not None else {}

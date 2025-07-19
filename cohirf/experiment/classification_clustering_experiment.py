@@ -12,6 +12,15 @@ from cohirf.experiment.clustering_experiment import ClusteringExperiment
 
 
 class ClassificationClusteringExperiment(ClusteringExperiment):
+    """
+    Experiment class for clustering synthetic classification datasets.
+    
+    This experiment generates synthetic datasets using scikit-learn's make_classification function
+    and evaluates clustering algorithms on them. The classification datasets can be configured with
+    various parameters such as number of informative/redundant/random features, class separation,
+    and noise levels to create diverse clustering challenges.
+    """
+    
     def __init__(
             self,
             *args,
@@ -35,6 +44,45 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             add_outlier: bool = False,
             **kwargs
     ):
+        """
+        Initialize the ClassificationClusteringExperiment.
+
+        Args:
+            *args: Variable length argument list passed to parent class.
+            n_samples (int | list[int], optional): Number of samples to generate. 
+                If list, creates multiple experiments. Defaults to 100.
+            n_random (int | list[int], optional): Number of random features without useful information.
+                If list, creates multiple experiments. Defaults to 0.
+            n_informative (int | list[int], optional): Number of informative features.
+                If list, creates multiple experiments. Defaults to 10.
+            n_redundant (int, optional): Number of redundant features (linear combinations of informative).
+                Defaults to 0.
+            n_repeated (int, optional): Number of features that are duplicates of existing features.
+                Defaults to 0.
+            n_classes (int | list[int], optional): Number of classes (clusters) for the classification.
+                If list, creates multiple experiments. Defaults to 2.
+            n_clusters_per_class (int, optional): Number of clusters per class. Defaults to 1.
+            weights (Optional[list], optional): Proportions of samples assigned to each class.
+                If None, classes are balanced. Defaults to None.
+            flip_y (float, optional): Fraction of samples whose class is flipped (noise). Defaults to 0.0.
+            class_sep (float | list[float], optional): Factor multiplying the hypercube size for class separation.
+                If list, creates multiple experiments. Defaults to 1.0.
+            hypercube (bool, optional): If True, clusters are placed on vertices of a hypercube.
+                If False, clusters are placed on vertices of a random polytope. Defaults to True.
+            shift (float, optional): Shift features by the specified value. Defaults to 0.0.
+            scale (float, optional): Multiply features by the specified value. Defaults to 1.0.
+            shuffle (bool, optional): Whether to shuffle the samples and features. Defaults to True.
+            seed_dataset (int | list[int], optional): Random seed(s) for dataset generation.
+                If list, creates multiple experiments with different seeds. Defaults to 0.
+            n_features_dataset (Optional[int | list[int]], optional): Total number of features.
+                If None, computed from other feature parameters. If list, creates multiple experiments.
+                Defaults to None.
+            pct_random (Optional[float | list[float]], optional): Percentage of random features.
+                Alternative to specifying n_random directly. If list, creates multiple experiments.
+                Defaults to None.
+            add_outlier (bool, optional): Whether to add outlier samples to the dataset. Defaults to False.
+            **kwargs: Additional keyword arguments passed to parent class.
+        """
         super().__init__(*args, **kwargs)
         self.n_samples = n_samples
         self.n_random = n_random

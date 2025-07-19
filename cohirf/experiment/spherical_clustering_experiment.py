@@ -162,6 +162,16 @@ def visualize_3d_data(data, labels):
 
 
 class SphericalClusteringExperiment(ClusteringExperiment):
+	"""
+	Experiment class for clustering synthetic spherical datasets.
+	
+	This experiment generates synthetic datasets consisting of points distributed on 
+	concentric spheres with configurable radii, separation, and noise parameters.
+	The spherical structure creates unique geometric challenges for clustering algorithms,
+	particularly useful for testing algorithms' ability to handle non-convex shapes
+	and nested cluster structures. The experiment optionally includes radius as an
+	additional feature to test how algorithms handle different dimensionalities.
+	"""
 
 	def __init__(
 		self,
@@ -174,6 +184,31 @@ class SphericalClusteringExperiment(ClusteringExperiment):
 		seed_dataset: int | list[int] = 0,
 		**kwargs,
 	):
+		"""
+		Initialize the SphericalClusteringExperiment.
+
+		Args:
+			*args: Variable length argument list passed to parent class.
+			n_spheres (int | list[int], optional): Number of concentric spheres to generate.
+				Each sphere represents a distinct cluster. If list, creates multiple experiments.
+				Defaults to 2.
+			n_samples (int | list[int], optional): Total number of samples to generate across
+				all spheres. Samples are distributed equally among spheres. If list, creates
+				multiple experiments. Defaults to 2000.
+			radius_separation (float | list[float], optional): Base separation distance between
+				consecutive spheres. Spheres are positioned at linearly spaced radii starting
+				from this value. If list, creates multiple experiments. Defaults to 0.5.
+			radius_std (float | list[float], optional): Standard deviation for noise added
+				to the sphere surfaces. Controls how "thick" each spherical shell is.
+				If list, creates multiple experiments. Defaults to 0.01.
+			add_radius_as_feature (bool, optional): Whether to add the radius (distance from origin)
+				as an additional feature. This can make clustering easier by providing explicit
+				radial information. Defaults to False.
+			seed_dataset (int | list[int], optional): Random seed(s) for dataset generation.
+				If list, creates multiple experiments with different seeds for reproducibility.
+				Defaults to 0.
+			**kwargs: Additional keyword arguments passed to parent class.
+		"""
 		super().__init__(*args, **kwargs)
 		self.n_samples = n_samples
 		self.n_spheres = n_spheres

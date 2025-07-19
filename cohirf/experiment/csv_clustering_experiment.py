@@ -9,11 +9,31 @@ from cohirf.experiment.clustering_experiment import ClusteringExperiment
 
 
 class CSVClusteringExperiment(ClusteringExperiment):
+    """
+    Experiment class for clustering real datasets loaded from CSV files.
+    
+    This experiment loads real-world datasets from CSV files using a metadata CSV that specifies
+    dataset paths and categorical feature information. It performs automatic preprocessing including
+    handling categorical features (one-hot encoding), filling missing values, standardizing 
+    continuous features, and removing zero-variance features. The experiment is designed to work
+    with diverse real-world datasets that require preprocessing before clustering.
+    """
+    
     def __init__(
             self,
             datasets_names: Optional[list[str]] = None,
             **kwargs
     ):
+        """
+        Initialize the CSVClusteringExperiment.
+
+        Args:
+            datasets_names (Optional[list[str]], optional): List of dataset names to process.
+                These names should correspond to entries in the 'csv_data.csv' metadata file
+                that contains dataset paths and feature information. If None, must be specified
+                via command line arguments or before running experiments. Defaults to None.
+            **kwargs: Additional keyword arguments passed to parent class.
+        """
         super().__init__(**kwargs)
         self.datasets_names = datasets_names
 

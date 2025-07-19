@@ -230,6 +230,17 @@ models_dict.update(
 
 
 class OpenmlClusteringExperiment(ClusteringExperiment):
+    """
+    Experiment class for clustering real-world datasets from OpenML.
+    
+    This experiment loads datasets or tasks from the OpenML platform and evaluates
+    clustering algorithms on them. It supports both direct dataset loading and task-based
+    loading with proper train/test splits. The experiment includes automatic preprocessing
+    for categorical features and optional standardization. It's designed to work with
+    the diverse collection of real-world datasets available on OpenML for comprehensive
+    clustering performance evaluation.
+    """
+    
     def __init__(
             self,
             dataset_id: Optional[int | list[int]] = None,
@@ -240,6 +251,30 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             standardize: bool = False,
             **kwargs
     ):
+        """
+        Initialize the OpenmlClusteringExperiment.
+
+        Args:
+            dataset_id (Optional[int | list[int]], optional): OpenML dataset ID(s) to load directly.
+                Cannot be used together with task_id. If list, creates multiple experiments
+                with different datasets. Defaults to None.
+            task_id (Optional[int | list[int]], optional): OpenML task ID(s) to load with proper
+                train/test splits. Cannot be used together with dataset_id. If list, creates
+                multiple experiments with different tasks. Defaults to None.
+            task_repeat (int | list[int], optional): Task repeat index(es) for cross-validation
+                when using task_id. Used to select specific repetitions of the experimental setup.
+                If list, creates multiple experiments. Defaults to 0.
+            task_fold (int | list[int], optional): Task fold index(es) for cross-validation
+                when using task_id. Used to select specific folds within a repetition.
+                If list, creates multiple experiments. Defaults to 0.
+            task_sample (int | list[int], optional): Task sample index(es) for stratified sampling
+                when using task_id. Used for datasets with stratified sampling strategies.
+                If list, creates multiple experiments. Defaults to 0.
+            standardize (bool, optional): Whether to standardize features (zero mean, unit variance)
+                before clustering. Recommended for algorithms sensitive to feature scales.
+                Defaults to False.
+            **kwargs: Additional keyword arguments passed to parent class.
+        """
         super().__init__(**kwargs)
         self.dataset_id = dataset_id
         self.task_id = task_id

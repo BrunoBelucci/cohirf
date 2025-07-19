@@ -12,6 +12,15 @@ from cohirf.experiment.open_ml_clustering_experiment import ClusteringExperiment
 
 
 class BlobClusteringExperiment(ClusteringExperiment):
+    """
+    Experiment class for clustering synthetic blob datasets.
+    
+    This experiment generates synthetic datasets using scikit-learn's make_blobs function
+    and evaluates clustering algorithms on them. The blob datasets consist of isotropic
+    Gaussian blobs that can be configured with various parameters such as number of samples,
+    features, cluster standard deviation, and random seeds.
+    """
+    
     def __init__(
             self,
             *args,
@@ -24,6 +33,30 @@ class BlobClusteringExperiment(ClusteringExperiment):
             seeds_dataset: int | list[int] = 0,
             **kwargs
     ):
+        """
+        Initialize the BlobClusteringExperiment.
+
+        Args:
+            *args: Variable length argument list passed to parent class.
+            n_samples (int | list[int], optional): Number of samples to generate for each blob dataset.
+                If int, creates a single dataset size. If list, creates multiple experiments with
+                different sample sizes. Defaults to 100.
+            n_features_dataset (int | list[int], optional): Number of features (dimensions) for each
+                blob dataset. If int, creates datasets with single dimensionality. If list, creates
+                multiple experiments with different dimensionalities. Defaults to 2.
+            centers (int, optional): Number of centers (clusters) to generate in the blob dataset.
+                Defaults to 3.
+            cluster_std (float, optional): Standard deviation of the clusters. Controls how spread
+                out the points are within each cluster. Defaults to 1.0.
+            center_box (tuple[float, float], optional): Bounding box for cluster centers, specified
+                as (min_value, max_value). Centers will be randomly placed within this range.
+                Defaults to (-10.0, 10.0).
+            shuffle (bool, optional): Whether to shuffle the samples after generation. Defaults to True.
+            seeds_dataset (int | list[int], optional): Random seed(s) for dataset generation.
+                If int, uses single seed. If list, creates multiple experiments with different seeds
+                for reproducibility. Defaults to 0.
+            **kwargs: Additional keyword arguments passed to parent class.
+        """
         super().__init__(*args, **kwargs)
         if isinstance(n_samples, int):
             n_samples = [n_samples]

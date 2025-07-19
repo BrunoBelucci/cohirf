@@ -38,6 +38,17 @@ def make_multivariate_normal(n_samples, n_informative_features, n_random_feature
 
 
 class GaussianClusteringExperiment(ClusteringExperiment):
+    """
+    Experiment class for clustering synthetic Gaussian datasets.
+    
+    This experiment generates synthetic datasets using multivariate normal distributions
+    with configurable parameters for cluster separation, noise, and dimensionality.
+    The clusters are positioned using a regular simplex structure to ensure controlled
+    geometric relationships. The experiment allows fine-grained control over informative
+    vs. random features, making it ideal for studying clustering performance under
+    different signal-to-noise ratios and dimensionality settings.
+    """
+    
     def __init__(
             self,
             *args,
@@ -52,6 +63,36 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             seeds_unified: Optional[int | list[int]] = None,
             **kwargs
     ):
+        """
+        Initialize the GaussianClusteringExperiment.
+
+        Args:
+            *args: Variable length argument list passed to parent class.
+            n_samples (int | list[int], optional): Number of samples per cluster.
+                If list, creates multiple experiments. Defaults to 100.
+            n_features (int | list[int], optional): Total number of features in the dataset.
+                If list, creates multiple experiments. Defaults to 10.
+            n_random_features (Optional[int | list[int] | list[None]], optional): Number of random
+                (noise) features without clustering information. If None, computed from other parameters.
+                If list, creates multiple experiments. Defaults to None.
+            n_informative_features (Optional[int | list[int]], optional): Number of informative
+                features that contain clustering signal. If None, computed from other parameters.
+                If list, creates multiple experiments. Defaults to None.
+            pct_random_features (Optional[float | list[float]], optional): Percentage of features
+                that should be random noise (0.0 to 1.0). Alternative to specifying n_random_features
+                directly. If list, creates multiple experiments. Defaults to None.
+            n_centers (int | list[int], optional): Number of cluster centers to generate.
+                If list, creates multiple experiments. Defaults to 3.
+            distances (float | list[float], optional): Distance parameter controlling cluster
+                separation. Larger values create more separated clusters. If list, creates multiple
+                experiments. Defaults to 1.0.
+            seeds_dataset (int | list[int], optional): Random seed(s) for dataset generation.
+                If list, creates multiple experiments with different seeds. Defaults to 0.
+            seeds_unified (Optional[int | list[int]], optional): Unified random seeds for
+                controlling all randomness in the experiment. If specified, overrides other seed
+                parameters. If list, creates multiple experiments. Defaults to None.
+            **kwargs: Additional keyword arguments passed to parent class.
+        """
         super().__init__(*args, **kwargs)
         if isinstance(n_samples, int):
             n_samples = [n_samples]

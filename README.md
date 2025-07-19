@@ -39,8 +39,9 @@ The repository is structured as follows:
 the `ml_experiments` library.
   - 'models': Contains the code for every model used in the experiments.
     - 'cohirf': Contains the code for the CoHiRF model.
+    - 'batch_cohirf': Contains the code for the BatchCoHiRF model.
   - 'metrics.py': Contains the code for some metrics implemented in dask for large datasets.
 
 - analyze_results: some notebooks to analyze experiment results.
 - development_notebooks: some notebooks to test the code and run small experiments.
-- teste: unit tests for the code.
+- test: unit tests for the code.

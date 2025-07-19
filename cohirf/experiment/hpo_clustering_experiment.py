@@ -9,6 +9,16 @@ import mlflow
 
 
 class HPOClusteringExperiment(HPOExperiment):
+    """
+    Abstract experiment class for hyperparameter optimization (HPO) of clustering algorithms.
+    
+    This class extends the base HPO framework to support clustering-specific experiments.
+    It manages the hyperparameter search process using Optuna, handles random seed generation
+    for reproducible trials, and integrates with MLflow for experiment tracking. Subclasses
+    must implement the data loading logic by providing a simple clustering experiment instance.
+    The class supports both predefined model configurations and custom search spaces.
+    """
+    
     def __init__(
 			self,
 			*args,
@@ -16,6 +26,21 @@ class HPOClusteringExperiment(HPOExperiment):
 			default_values: Optional[list] = None,
 			**kwargs,
 	):
+        """
+        Initialize the HPOClusteringExperiment.
+
+        Args:
+            *args: Variable length argument list passed to parent class.
+            search_space (Optional[dict], optional): Custom hyperparameter search space definition
+                using Optuna distributions (e.g., FloatDistribution, IntDistribution).
+                Required when using custom models not in the models dictionary.
+                Defaults to None (uses model-specific search space).
+            default_values (Optional[list], optional): List of default parameter configurations
+                to try before starting the optimization search. Useful for providing good
+                starting points or baseline configurations. Required when using custom models.
+                Defaults to None (uses model-specific defaults).
+            **kwargs: Additional keyword arguments passed to parent class.
+        """
         super().__init__(*args, **kwargs)
         self.search_space = search_space if search_space is not None else {}
         self.default_values = default_values if default_values is not None else []
