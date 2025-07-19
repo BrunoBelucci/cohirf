@@ -204,7 +204,6 @@ models_dict.update(
                     repetitions=optuna.distributions.IntDistribution(1, 10),
                     base_model_kwargs=dict(
                         n_clusters=optuna.distributions.IntDistribution(2, 5),
-                        min_samples=optuna.distributions.IntDistribution(2, 50),
                     ),
                     transform_kwargs=dict(
                         gamma=optuna.distributions.FloatDistribution(0.1, 30),
