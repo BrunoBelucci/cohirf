@@ -1,9 +1,9 @@
 from typing import Optional
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, ClusterMixin
 from sklearn.cluster import KMeans
 from sklearn.decomposition import KernelPCA
 
-class PseudoKernelClustering:
+class PseudoKernelClustering(ClusterMixin, BaseEstimator):
     def __init__(
             self,
             base_model: str | type[BaseEstimator] = 'kmeans',
