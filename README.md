@@ -45,3 +45,12 @@ the `ml_experiments` library.
 - analyze_results: some notebooks to analyze experiment results.
 - development_notebooks: some notebooks to test the code and run small experiments.
 - test: unit tests for the code.
+
+## Running the experiments
+
+To run the experiments, you can use the scripts inside the `scripts` folder. Note that we provide the script to run the
+full experiment in one go, but in practice it is better to run the experiments in smaller chunks and check if they have
+run successfully, especially because some combinations of models and datasets can take a long time to run or need more
+memory than available in the machine, which can lead to the process being killed by the system. Once the experiments are
+run, you can analyze the results using the notebooks in the `analyze_results` folder, adapting the "Load mlflow runs"
+section to the location of the results of your experiments.
