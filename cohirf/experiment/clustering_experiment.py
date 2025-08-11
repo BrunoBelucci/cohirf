@@ -15,6 +15,7 @@ from cohirf.experiment.tested_models import models_dict
 from ml_experiments.utils import update_recursively, profile_memory, profile_time
 import json
 import os
+from warnings import warn
 
 
 def inertia_score(X, y):
@@ -75,6 +76,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         clean_data_dir: Optional[bool] = True,
         calculate_davies_bouldin: bool = False,
         calculate_full_silhouette: bool = False,
+        calculate_metrics_even_if_too_many_clusters: bool = False,
         # if we set this, we will automatically set the number of threads to accomodate the number of jobs
         max_threads: Optional[int] = None,
         **kwargs,
@@ -109,6 +111,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
             max_threads (Optional[int], optional): Maximum number of threads to use across all jobs.
                 Automatically adjusts threading to accommodate the number of parallel jobs.
                 Defaults to None (no limit).
+            calculate_metrics_even_if_too_many_clusters (bool, optional): Whether to calculate
+                metrics even if the number of clusters is too high. Defaults to False.
             **kwargs: Additional keyword arguments passed to parent class.
         """
         super().__init__(*args, **kwargs)
@@ -120,6 +124,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.calculate_davies_bouldin = calculate_davies_bouldin
         self.calculate_full_silhouette = calculate_full_silhouette
         self.max_threads = max_threads
+        self.calculate_metrics_even_if_too_many_clusters = calculate_metrics_even_if_too_many_clusters
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
@@ -135,6 +140,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.parser.add_argument('--calculate_full_silhouette', action='store_true', default=self.calculate_full_silhouette,
                                 help='Calculate full silhouette score (not sampled).')
         self.parser.add_argument('--max_threads', type=int, default=self.max_threads, help='Maximum number of threads to use across all jobs.')
+        self.parser.add_argument('--calculate_metrics_even_if_too_many_clusters', action='store_true', default=self.calculate_metrics_even_if_too_many_clusters,
+                                help='Calculate metrics even if the number of clusters is too high.')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -146,6 +153,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.calculate_davies_bouldin = args.calculate_davies_bouldin
         self.calculate_full_silhouette = args.calculate_full_silhouette
         self.max_threads = args.max_threads
+        self.calculate_metrics_even_if_too_many_clusters = args.calculate_metrics_even_if_too_many_clusters
         return args
 
     def _get_combinations_names(self) -> list[str]:
@@ -160,6 +168,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         unique_params["max_threads"] = self.max_threads
         unique_params["calculate_davies_bouldin"] = self.calculate_davies_bouldin
         unique_params["calculate_full_silhouette"] = self.calculate_full_silhouette
+        unique_params["calculate_metrics_even_if_too_many_clusters"] = self.calculate_metrics_even_if_too_many_clusters
         return unique_params
 
     def _get_extra_params(self):
@@ -241,8 +250,11 @@ class ClusteringExperiment(BaseExperiment, ABC):
         y_pred = kwargs['fit_model_return']['y_pred']
         n_clusters = len(np.unique(y_pred))
         results = {"n_clusters_": n_clusters}
-        if n_clusters > 0.5 * X.shape[0]:
-            return results  # Avoid calculating scores if too many clusters (they are probably not meaningful)
+        calculate_metrics_even_if_too_many_clusters = unique_params["calculate_metrics_even_if_too_many_clusters"]
+        if not calculate_metrics_even_if_too_many_clusters:
+            if n_clusters > 0.5 * X.shape[0]:
+                warn(f"Too many clusters ({n_clusters}) for dataset with {X.shape[0]} samples. Skipping metric calculation. If you want to calculate metrics anyway, set `calculate_metrics_even_if_too_many_clusters` to True.")
+                return results  # Avoid calculating scores if too many clusters (they are probably not meaningful)
         for score_name, score_fn in scores.items():
             if callable(score_fn):
                 if score_name == 'homogeneity_completeness_v_measure':
