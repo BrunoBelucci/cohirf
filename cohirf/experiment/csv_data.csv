@@ -1,6 +1,6 @@
-dataset_name;X_path;y_path;cat_features
-fma;data/fma_metadata/X.csv;data/fma_metadata/y.csv;8,9,11,13,14
-criteo-up-full;data/criteo-up/X.csv;/home/belucci/code/cohirf/data/criteo-up/y.csv;12
-criteo-up-sub;data/criteo-up-sub/X.csv;/home/belucci/code/cohirf/data/criteo-up-sub/y.csv;12
-kdd-99-full;data/kdd-99/X.csv;/home/belucci/code/cohirf/data/kdd-99/y.csv;1,2,3,6,11,20,21
-kdd-99-sub;data/kdd-99-sub/X.csv;/home/belucci/code/cohirf/data/kdd-99-sub/y.csv;1,2,3,6,11,20,21
+dataset_name;cat_features
+fma;8,9,11,13,14
+criteo-up-full;12
+criteo-up-sub;12
+kdd-99-full;1,2,3,6,11,20,21
+kdd-99-sub;1,2,3,6,11,20,21

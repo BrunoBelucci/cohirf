@@ -55,8 +55,6 @@ class CSVClusteringExperiment(ClusteringExperiment):
                                dtype={'dataset_name': str, 'X_path': str, 'y_path': str, 'cat_features': str})
         dataset_name = combination['dataset_name']
         dataset_row = csv_data[csv_data['dataset_name'] == dataset_name]
-        X_path = dataset_row['X_path'].values[0]
-        y_path = dataset_row['y_path'].values[0]
         cat_features = dataset_row['cat_features'].values[0]
         standardize = unique_params["standardize"]
         # transform nan to 'None'
@@ -67,8 +65,8 @@ class CSVClusteringExperiment(ClusteringExperiment):
             cat_features = [int(feature) for feature in cat_features.split(',')]
         else:
             cat_features = []
-        X = pd.read_csv(X_path, index_col=0)
-        y = pd.read_csv(y_path, index_col=0)
+        X = pd.read_csv(Path(__file__).parent.parent.parent / 'data' / dataset_name / 'X.csv', index_col=0)
+        y = pd.read_csv(Path(__file__).parent.parent.parent / 'data' / dataset_name / 'y.csv', index_col=0)
         y = y.iloc[:, 0]
         cat_features_names = X.columns[cat_features].tolist()
         cont_features_names = [feature for feature in X.columns if feature not in cat_features_names]
