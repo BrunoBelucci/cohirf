@@ -9,3 +9,4 @@ results/
 .pytest_cache/
 *work/
 *mlruns/
+*data/
