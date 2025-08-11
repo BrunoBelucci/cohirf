@@ -229,6 +229,40 @@ models_dict.update(
 )
 
 
+def preprocess(X, y, cat_features_names, cont_features_names, standardize):
+    y = y[~X.duplicated()].copy()
+    X = X[~X.duplicated()].copy()
+    # categorical features
+    if cat_features_names:
+        # we will convert categorical features to codes
+        for cat_feature in cat_features_names:
+            X[cat_feature] = X[cat_feature].astype("category").cat.codes
+            X[cat_feature] = X[cat_feature].replace(-1, np.nan).astype('category')
+        # we will fill missing values with the most frequent value
+        X[cat_features_names] = X[cat_features_names].fillna(X[cat_features_names].mode().iloc[0])
+        # we will one hot encode the categorical features and convert them to float
+        # but only if they have less than 10 categories, else we drop them
+        cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
+        cat_features_names_more_10 = [cat_feature for cat_feature, cat_dim in zip(cat_features_names, cat_dims) if
+                                        cat_dim < 10]
+        X = pd.get_dummies(X, columns=cat_features_names_more_10, drop_first=True, dtype=float)
+        cat_features_drop = [cat_feature for cat_feature in cat_features_names if
+                                cat_feature not in cat_features_names_more_10]
+        X = X.drop(columns=cat_features_drop)
+    # continuous features
+    if cont_features_names:
+        # we will fill missing values with the median
+        X[cont_features_names] = X[cont_features_names].fillna(X[cont_features_names].median())
+        # we will standardize the continuous features
+        if standardize:
+            X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
+        # we will cast them to float
+        X[cont_features_names] = X[cont_features_names].astype(float)
+    # we will drop 0 variance features
+    X = X.dropna(axis=1, how='all')
+    return X, y
+
+
 class OpenmlClusteringExperiment(ClusteringExperiment):
     """
     Experiment class for clustering real-world datasets from OpenML.
@@ -364,38 +398,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         n_classes = len(y.unique())
         dataset_name = dataset.name
         # we will preprocess the data always in the same way
-        # we first delete duplicated rows
-        y = y[~X.duplicated()]
-        X = X[~X.duplicated()]
-        # categorical features
-        if cat_features_names:
-            # we will convert categorical features to codes
-            for cat_feature in cat_features_names:
-                X[cat_feature] = X[cat_feature].cat.codes
-                X[cat_feature] = X[cat_feature].replace(-1, np.nan).astype('category')
-            # we will fill missing values with the most frequent value
-            X[cat_features_names] = X[cat_features_names].fillna(X[cat_features_names].mode().iloc[0])
-            # we will one hot encode the categorical features and convert them to float
-            # but only if they have less than 10 categories, else we drop them
-            cat_dims = [len(X[cat_feature].cat.categories) for cat_feature in cat_features_names]
-            cat_features_names_more_10 = [cat_feature for cat_feature, cat_dim in zip(cat_features_names, cat_dims) if
-                                          cat_dim < 10]
-            X = pd.get_dummies(X, columns=cat_features_names_more_10, drop_first=True, dtype=float)
-            cat_features_drop = [cat_feature for cat_feature in cat_features_names if
-                                 cat_feature not in cat_features_names_more_10]
-            X = X.drop(columns=cat_features_drop)
-        # continuous features
-        if cont_features_names:
-            # we will fill missing values with the median
-            X[cont_features_names] = X[cont_features_names].fillna(X[cont_features_names].median())
-            # we will standardize the continuous features
-            if standardize:
-                X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
-            # we will cast them to float
-            X[cont_features_names] = X[cont_features_names].astype(float)
-        # we will drop 0 variance features
-        X = X.dropna(axis=1, how='all')
-
+        X, y = preprocess(X, y, cat_features_names, cont_features_names, standardize)
         # log to mlflow to facilitate analysis
         if mlflow_run_id is not None:
             mlflow.log_params({
