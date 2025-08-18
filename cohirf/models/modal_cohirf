@@ -1,0 +1,59 @@
+from typing import Optional, Literal
+from cohirf.models.cohirf import BaseCoHiRF
+
+
+class ModalCoHiRF(BaseCoHiRF):
+
+    def __init__(
+        self,
+        cohirf_model: type[BaseCoHiRF] | list[type[BaseCoHiRF]] = BaseCoHiRF,
+        cohirf_kwargs: Optional[dict] | list[dict] = None,
+        hierarchy_strategy: Literal["parents", "labels"] = "parents",
+        features_groups: Optional[list[list[int]]] = None,
+        max_iter: int = 100,
+        verbose: bool = False,
+        n_samples_representative: Optional[int] = None,
+        random_state: Optional[int] = None,
+        representative_method: Literal[
+            "closest_overall", "closest_to_centroid", "rbf", "rbf_median", "laplacian", "laplacian_median"
+        ] = "closest_overall",
+        automatically_get_labels: bool = True,
+    ):
+        self.cohirf_model = cohirf_model
+        self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
+        self.hierarchy_strategy = hierarchy_strategy
+        if features_groups is None:
+            raise ValueError("features_groups must be provided")
+        self.features_groups = features_groups
+        self.max_iter = max_iter
+        self.verbose = verbose
+        self.transform_once_per_iteration = False
+        self.repetitions = len(features_groups)
+        self.n_samples_representative = n_samples_representative
+        self._random_state = random_state
+        self.representative_method = representative_method
+        self.automatically_get_labels = automatically_get_labels
+
+    def run_one_repetition(self, X_representative, i_group): # pyright: ignore[reportIncompatibleMethodOverride]
+        if self.verbose:
+            print("Starting i_group", i_group)
+
+        features = self.features_groups[i_group]
+        X_group = X_representative[:, features]
+
+        if isinstance(self.cohirf_model, list):
+            cohirf_model = self.cohirf_model[i_group]
+        else:
+            cohirf_model = self.cohirf_model
+
+        if isinstance(self.cohirf_kwargs, list):
+            cohirf_kwargs = self.cohirf_kwargs[i_group]
+        else:
+            cohirf_kwargs = self.cohirf_kwargs
+
+        # update max_iter of cohirf_instance if needed (1 by default)
+        if "max_iter" not in cohirf_kwargs:
+            cohirf_kwargs["max_iter"] = 1
+        cohirf_instance = cohirf_model(**cohirf_kwargs)
+        labels = cohirf_instance.fit_predict(X_group)
+        return labels

@@ -52,11 +52,14 @@ def get_labels_from_parents(parents, representative_indexes, verbose=0):
 
 
 class BaseCoHiRF(ClusterMixin, BaseEstimator):
+
     def __init__(
         self,
         repetitions: int = 10,
         verbose: int | bool = 0,
-        representative_method: str = "closest_overall",
+        representative_method: Literal[
+            "closest_overall", "closest_to_centroid", "rbf", "rbf_median", "laplacian", "laplacian_median"
+        ] = "closest_overall",
         n_samples_representative: Optional[int] = None,
         random_state: Optional[int] = None,
         n_jobs: int = 1,
@@ -102,7 +105,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         elif isinstance(self._random_state, int):
             self._random_state = np.random.default_rng(self._random_state)
         return self._random_state
-    
+
     @random_state.setter
     def random_state(self, value):
         if value is None:
@@ -490,7 +493,9 @@ class CoHiRF(BaseCoHiRF):
         self,
         repetitions: int = 10,
         verbose: int | bool = 0,
-        representative_method: str = "closest_overall",
+        representative_method: Literal[
+            "closest_overall", "closest_to_centroid", "rbf", "rbf_median", "laplacian", "laplacian_median"
+        ] = "closest_overall",
         n_samples_representative: Optional[int] = None,
         random_state: Optional[int] = None,
         n_jobs: int = 1,
