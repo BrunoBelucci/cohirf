@@ -253,6 +253,10 @@ def preprocess(X, y, cat_features_names, cont_features_names, standardize):
     if cont_features_names:
         # we will fill missing values with the median
         X[cont_features_names] = X[cont_features_names].fillna(X[cont_features_names].median())
+        # we will drop 0 std features
+        columns_with_0_std = X.columns[X.std() == 0]
+        X = X.drop(columns=columns_with_0_std)
+        cont_features_names = [col for col in cont_features_names if col not in columns_with_0_std]
         # we will standardize the continuous features
         if standardize:
             X[cont_features_names] = (X[cont_features_names] - X[cont_features_names].mean()) / X[cont_features_names].std()
