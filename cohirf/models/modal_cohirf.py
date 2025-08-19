@@ -18,6 +18,7 @@ class ModalCoHiRF(BaseCoHiRF):
             "closest_overall", "closest_to_centroid", "rbf", "rbf_median", "laplacian", "laplacian_median"
         ] = "closest_overall",
         automatically_get_labels: bool = True,
+        n_jobs: int = 1,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
@@ -33,6 +34,7 @@ class ModalCoHiRF(BaseCoHiRF):
         self._random_state = random_state
         self.representative_method = representative_method
         self.automatically_get_labels = automatically_get_labels
+        self.n_jobs = n_jobs
 
     def run_one_repetition(self, X_representative, i_group): # pyright: ignore[reportIncompatibleMethodOverride]
         if self.verbose:
