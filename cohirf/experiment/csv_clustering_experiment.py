@@ -1,7 +1,7 @@
 from typing import Optional
 import mlflow
 import pandas as pd
-from cohirf.experiment.open_ml_clustering_experiment import preprocess
+from cohirf.experiment.open_ml_clustering_experiment import preprocess, models_dict
 from cohirf.experiment.clustering_experiment import ClusteringExperiment
 from pathlib import Path
 
@@ -36,6 +36,10 @@ class CSVClusteringExperiment(ClusteringExperiment):
         super().__init__(**kwargs)
         self.dataset_name = dataset_name
         self.standardize = standardize
+
+    @property
+    def models_dict(self):
+        return models_dict.copy()
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
