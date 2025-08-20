@@ -2,6 +2,7 @@ dataset_name;cat_features
 fma;8,9,11,13,14
 criteo-up-full;12
 criteo-up-sub;12
+criteo-up-bal;12
 kdd-99-full;1,2,3,6,11,20,21
 kdd-99-sub;1,2,3,6,11,20,21
 user-behavior-100k;
