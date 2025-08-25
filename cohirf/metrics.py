@@ -213,3 +213,98 @@ def homogeneity_completeness_v_measure(labels_true, labels_pred, *, beta=1.0):
         )
 
     return homogeneity, completeness, v_measure_score
+
+
+def davies_bouldin_score(X, labels, chunk_size=1000):
+    """
+    Compute the Davies-Bouldin score avoiding full pairwise distance matrix computation.
+    
+    This implementation avoids the memory bottleneck in sklearn's implementation which 
+    computes the full centroid_distances = pairwise_distances(centroids) matrix.
+    Instead, it processes centroid distances in chunks to handle large numbers of clusters.
+    
+    The memory bottleneck in sklearn occurs at:
+    centroid_distances = pairwise_distances(centroids)  # OOM for many clusters
+    
+    Parameters
+    ----------
+    X : array-like of shape (n_samples, n_features)
+        A list of n_features-dimensional data points. Each row corresponds
+        to a single data point.
+    
+    labels : array-like of shape (n_samples,)
+        Predicted labels for each sample.
+    
+    chunk_size : int, default=1000
+        Number of centroids to process in each chunk for distance computation.
+        Reduce this if you encounter memory issues.
+    
+    Returns
+    -------
+    score : float
+        The resulting Davies-Bouldin score.
+    """
+    from sklearn.utils import check_X_y
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.metrics.cluster._unsupervised import check_number_of_labels
+    from sklearn.metrics.pairwise import pairwise_distances
+    
+    # Convert to numpy if dask arrays
+    if hasattr(X, 'compute'):
+        X = X.compute()
+    if hasattr(labels, 'compute'):
+        labels = labels.compute()
+    
+    X, labels = check_X_y(X, labels)
+    le = LabelEncoder()
+    labels = le.fit_transform(labels)
+    n_samples, _ = X.shape
+    n_labels = len(le.classes_)
+    
+    # Handle edge case: single cluster (return 0.0 without validation error)
+    if n_labels == 1:
+        return 0.0
+    
+    check_number_of_labels(n_labels, n_samples)
+
+    # Compute centroids and intra-cluster distances (same as sklearn)
+    intra_dists = np.zeros(n_labels)
+    centroids = np.zeros((n_labels, X.shape[1]), dtype=float)
+    
+    for k in range(n_labels):
+        cluster_k = X[labels == k]
+        centroid = cluster_k.mean(axis=0)
+        centroids[k] = centroid
+        centroid_reshaped = centroid.reshape(1, -1)
+        intra_dists[k] = np.average(pairwise_distances(cluster_k, centroid_reshaped))
+
+    if np.allclose(intra_dists, 0) or np.allclose(centroids, centroids[0]):
+        return 0.0
+
+    # Instead of computing full pairwise_distances(centroids), 
+    # compute distances chunk by chunk to avoid OOM
+    scores = []
+    
+    for i in range(n_labels):
+        max_ratio = 0.0
+        
+        # Process centroids in chunks to avoid computing full distance matrix
+        for start in range(0, n_labels, chunk_size):
+            end = min(start + chunk_size, n_labels)
+            
+            # Get chunk of centroids and compute distances to centroid i
+            centroid_chunk = centroids[start:end]
+            
+            # Compute distances from centroid i to this chunk of centroids
+            distances_chunk = np.linalg.norm(centroid_chunk - centroids[i], axis=1)
+            
+            # Process each centroid in the chunk
+            for j_local, (dist, j_global) in enumerate(zip(distances_chunk, range(start, end))):
+                if i != j_global and dist > 0:  # Skip self-comparison and zero distances
+                    # Compute Davies-Bouldin ratio for this pair
+                    ratio = (intra_dists[i] + intra_dists[j_global]) / dist
+                    max_ratio = max(max_ratio, ratio)
+        
+        scores.append(max_ratio)
+    
+    return float(np.mean(scores))

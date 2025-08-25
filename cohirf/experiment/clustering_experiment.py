@@ -12,6 +12,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.base import BaseEstimator
 from ml_experiments.base_experiment import BaseExperiment
 from cohirf.experiment.tested_models import models_dict
+from cohirf.metrics import davies_bouldin_score as chunked_davies_bouldin_score
 from ml_experiments.utils import update_recursively, profile_memory, profile_time
 import json
 import os
@@ -75,6 +76,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         n_jobs: int = 1,
         clean_data_dir: Optional[bool] = True,
         calculate_davies_bouldin: bool = False,
+        chunk_size_davies_bouldin: Optional[int] = None,
         calculate_full_silhouette: bool = False,
         calculate_metrics_even_if_too_many_clusters: bool = False,
         # if we set this, we will automatically set the number of threads to accomodate the number of jobs
@@ -105,6 +107,9 @@ class ClusteringExperiment(BaseExperiment, ABC):
             calculate_davies_bouldin (bool, optional): Whether to calculate the Davies-Bouldin
                 clustering validity index. Can be computationally expensive for large datasets.
                 Defaults to False.
+            chunk_size_davies_bouldin (Optional[int], optional): Chunk size for Davies-Bouldin calculation.
+                If not specified, defaults to None (no chunking) and use sklearn implementation. If specified,
+                it will use our custom implementation with the given chunk size.
             calculate_full_silhouette (bool, optional): Whether to calculate the full silhouette
                 score using all samples. Can be computationally expensive for large datasets.
                 Defaults to False.
@@ -122,6 +127,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.n_jobs = n_jobs
         self.clean_data_dir = clean_data_dir
         self.calculate_davies_bouldin = calculate_davies_bouldin
+        self.chunk_size_davies_bouldin = chunk_size_davies_bouldin
         self.calculate_full_silhouette = calculate_full_silhouette
         self.max_threads = max_threads
         self.calculate_metrics_even_if_too_many_clusters = calculate_metrics_even_if_too_many_clusters
@@ -137,6 +143,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.parser.add_argument('--do_not_clean_data_dir', action='store_true')
         self.parser.add_argument('--calculate_davies_bouldin', action='store_true', default=self.calculate_davies_bouldin,
                                 help='Calculate Davies-Bouldin score.')
+        self.parser.add_argument('--chunk_size_davies_bouldin', type=int, default=self.chunk_size_davies_bouldin,
+                                 help='Chunk size for Davies-Bouldin calculation.')
         self.parser.add_argument('--calculate_full_silhouette', action='store_true', default=self.calculate_full_silhouette,
                                 help='Calculate full silhouette score (not sampled).')
         self.parser.add_argument('--max_threads', type=int, default=self.max_threads, help='Maximum number of threads to use across all jobs.')
@@ -151,6 +159,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.model_params = args.model_params
         self.seed_model = args.seed_model
         self.calculate_davies_bouldin = args.calculate_davies_bouldin
+        self.chunk_size_davies_bouldin = args.chunk_size_davies_bouldin
         self.calculate_full_silhouette = args.calculate_full_silhouette
         self.max_threads = args.max_threads
         self.calculate_metrics_even_if_too_many_clusters = args.calculate_metrics_even_if_too_many_clusters
@@ -167,6 +176,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         unique_params['model_params'] = self.model_params
         unique_params["max_threads"] = self.max_threads
         unique_params["calculate_davies_bouldin"] = self.calculate_davies_bouldin
+        unique_params["chunk_size_davies_bouldin"] = self.chunk_size_davies_bouldin
         unique_params["calculate_full_silhouette"] = self.calculate_full_silhouette
         unique_params["calculate_metrics_even_if_too_many_clusters"] = self.calculate_metrics_even_if_too_many_clusters
         return unique_params
@@ -213,6 +223,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
     ):
         calculate_davies_bouldin = unique_params["calculate_davies_bouldin"]
         calculate_full_silhouette = unique_params["calculate_full_silhouette"]
+        chunk_size_davies_bouldin = unique_params["chunk_size_davies_bouldin"]
         scores = {
             'rand_score': rand_score,
             'adjusted_rand': adjusted_rand_score,
@@ -224,7 +235,10 @@ class ClusteringExperiment(BaseExperiment, ABC):
             'calinski_harabasz_score': calinski_harabasz_score,
         }
         if calculate_davies_bouldin:
-            scores['davies_bouldin_score'] = davies_bouldin_score
+            if chunk_size_davies_bouldin is not None:
+                scores['davies_bouldin_score'] = partial(chunked_davies_bouldin_score, chunk_size=chunk_size_davies_bouldin)
+            else:
+                scores['davies_bouldin_score'] = davies_bouldin_score
         if calculate_full_silhouette:
             scores['silhouette'] = silhouette_score
         return scores
