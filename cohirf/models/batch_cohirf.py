@@ -21,6 +21,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         verbose: bool = False,
         n_jobs: int = 1,
         automatically_get_labels: bool = True,
+        random_state: Optional[int] = None,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
@@ -31,6 +32,24 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         self.verbose = verbose
         self.n_jobs = n_jobs
         self.automatically_get_labels = automatically_get_labels
+        self._random_state = random_state
+
+    @property
+    def random_state(self):
+        if self._random_state is None:
+            self._random_state = np.random.default_rng()
+        elif isinstance(self._random_state, int):
+            self._random_state = np.random.default_rng(self._random_state)
+        return self._random_state
+
+    @random_state.setter
+    def random_state(self, value):
+        if value is None:
+            self._random_state = np.random.default_rng()
+        elif isinstance(value, int):
+            self._random_state = np.random.default_rng(value)
+        else:
+            raise ValueError("random_state must be an integer or None.")
 
     def run_one_batch(self, X_representatives, i):
         n_samples = X_representatives.shape[0]
@@ -38,6 +57,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         end = min((i + 1) * self.batch_size, n_samples)
         indexes = np.arange(start, end)
         X_batch = X_representatives[indexes]
+        child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), i])
 
         if isinstance(X_batch, da.Array):
             # if X_batch is a dask array, we need to compute it
@@ -46,6 +66,9 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         # fit the cohirf model on the batch, update hierarchy_strategy if needed (priority to this class parameter)
         kwargs = self.cohirf_kwargs.copy()
         kwargs["hierarchy_strategy"] = self.hierarchy_strategy
+        # update random_state if needed
+        if "random_state" not in kwargs:
+            kwargs["random_state"] = child_random_state
         cohirf_model = self.cohirf_model(**kwargs)
         cohirf_model.fit(X_batch)
 
@@ -179,7 +202,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             X = X.to_dask_array(lengths=(self.batch_size, -1))
 
         n_samples = X.shape[0]
-        
+
         if self.batch_size is None:
             # we will use self.n_batches to determine the batch size
             self.batch_size = n_samples // self.n_batches

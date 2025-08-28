@@ -18,7 +18,7 @@ class HPOClusteringExperiment(HPOExperiment):
     must implement the data loading logic by providing a simple clustering experiment instance.
     The class supports both predefined model configurations and custom search spaces.
     """
-    
+
     def __init__(
 			self,
 			*args,
@@ -135,6 +135,7 @@ class HPOClusteringExperiment(HPOExperiment):
         keep_results = results.get("evaluate_model_return", {})
         fit_model_return_elapsed_time = results.get("fit_model_return", {}).get("elapsed_time", None)
         keep_results["elapsed_time"] = fit_model_return_elapsed_time
+        keep_results["seed_model"] = seed_model
 
         if mlflow_run_id is not None:
             log_metrics = keep_results.copy()
