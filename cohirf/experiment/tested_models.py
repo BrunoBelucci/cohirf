@@ -83,6 +83,28 @@ models_dict = {
             )
         ],
     ),
+    "CoHiRF-SC-SRGF": (
+        BaseCoHiRF,
+        dict(base_model=SpectralSubspaceRandomization, n_features=1.0),
+        dict(
+            repetitions=optuna.distributions.IntDistribution(2, 10),
+            base_model_kwargs=dict(
+                n_similarities=optuna.distributions.IntDistribution(10, 30),
+                sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
+            ),
+        ),
+        [
+            dict(
+                repetitions=5,
+                base_model_kwargs=dict(
+                    n_similarities=20,
+                    sampling_ratio=0.5,
+                    sc_n_clusters=3,
+                ),
+            )
+        ],
+    ),
     "BatchCoHiRF": (
         BatchCoHiRF,
         dict(),
@@ -194,20 +216,20 @@ models_dict = {
             ),
         ),
         dict(
-			cohirf_kwargs=dict(
+            cohirf_kwargs=dict(
                 n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
                 repetitions=optuna.distributions.IntDistribution(1, 10),
                 base_model_kwargs=dict(
                     n_clusters=optuna.distributions.IntDistribution(2, 5),
                 ),
-				transform_kwargs=dict(
+                transform_kwargs=dict(
                     gamma=optuna.distributions.FloatDistribution(0.1, 30),
                 ),
             )
         ),
         [
             dict(
-				cohirf_kwargs=dict(
+                cohirf_kwargs=dict(
                     n_features=0.3,
                     repetitions=5,
                     base_model_kwargs=dict(
