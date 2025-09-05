@@ -391,6 +391,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         i = 0
         self.n_clusters_iter_ = []
         self.labels_iter_ = []
+        self.representatives_iter_ = []
         # iterate until every sequence of labels is unique
         while (len(representatives_cluster_assignments) != n_clusters and i < self.max_iter):
             if self.verbose:
@@ -439,6 +440,8 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
 
             representatives_absolute_indexes = representatives_absolute_indexes[new_representatives_local_indexes]
             n_clusters = new_n_clusters
+            if self.save_path:
+                self.representatives_iter_.append(representatives_absolute_indexes)
 
             i += 1
 

@@ -22,6 +22,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         n_jobs: int = 1,
         automatically_get_labels: bool = True,
         random_state: Optional[int] = None,
+        save_path: bool = False,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
@@ -33,6 +34,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         self.n_jobs = n_jobs
         self.automatically_get_labels = automatically_get_labels
         self._random_state = random_state
+        self.save_path = save_path
 
     @property
     def random_state(self):
@@ -251,6 +253,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         i = 0
         stop = False
         n_clusters = 0
+        self.representatives_iter_ = []
         # stop when we have run with n_batches == 1
         while not stop and i < self.max_epochs:
             if self.verbose > 0:
@@ -280,6 +283,9 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
 
             # representatives_absolute_indexes = new_representatives_absolute_indexes
             representatives_absolute_indexes = representatives_absolute_indexes[new_representatives_local_indexes]
+            if self.save_path:
+                self.representatives_iter_.append(representatives_absolute_indexes)
+
             representatives_local_indexes = new_representatives_local_indexes
             n_clusters = new_n_clusters
 
