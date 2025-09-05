@@ -213,6 +213,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
                     os.environ[var] = str(threads_per_process)
             model.set_params(n_jobs=n_jobs)
         if hasattr(model, 'random_state'):
+            if "random_state" in model_params:  # override with model_params if present
+                seed_model = model_params["random_state"]
             model.set_params(random_state=seed_model)
         return {
             'model': model,
