@@ -10,6 +10,7 @@ class PseudoKernelClustering(ClusterMixin, BaseEstimator):
             base_model_kwargs: Optional[dict] = None,
             transform_method: str | type[TransformerMixin] = 'kpca',
             transform_kwargs: Optional[dict] = None,
+            random_state: Optional[int] = None,
     ):
         """
         Initialize the PseudoKernelClustering class.
@@ -29,6 +30,7 @@ class PseudoKernelClustering(ClusterMixin, BaseEstimator):
         self.base_model_kwargs = base_model_kwargs if base_model_kwargs else {}
         self.transform_method = transform_method
         self.transform_kwargs = transform_kwargs if transform_kwargs else {}
+        self.random_state = random_state
 
     def get_model_instance(self):
         if isinstance(self.base_model, str):
@@ -38,6 +40,10 @@ class PseudoKernelClustering(ClusterMixin, BaseEstimator):
                 raise ValueError("base_model must be 'kmeans' or a subclass of BaseEstimator")
         elif isinstance(self.base_model, type) and issubclass(self.base_model, BaseEstimator):
             model = self.base_model(**self.base_model_kwargs)
+            if hasattr(model, "random_state"):
+                model.set_params(random_state=self.random_state)
+            elif hasattr(model, "random_seed"):
+                model.set_params(random_seed=self.random_state)
         else:
             raise ValueError("base_model must be a string or a subclass of BaseEstimator")
         return model
@@ -52,6 +58,16 @@ class PseudoKernelClustering(ClusterMixin, BaseEstimator):
             transformer = self.transform_method(**self.transform_kwargs)
         else:
             raise ValueError("sampling_method must be a string or a subclass of TransformerMixin")
+        if hasattr(transformer, "random_state"):
+            try:
+                transformer.set_params(random_state=self.random_state)  # type: ignore
+            except AttributeError:
+                setattr(transformer, "random_state", self.random_state)
+        elif hasattr(transformer, "random_seed"):
+            try:
+                transformer.set_params(random_seed=self.random_state)  # type: ignore
+            except AttributeError:
+                setattr(transformer, "random_seed", self.random_state)
         return transformer
 
     def fit(self, X, y=None):
