@@ -229,7 +229,7 @@ models_dict.update(
 )
 
 
-def preprocess(X, y, cat_features_names, cont_features_names, standardize):
+def preprocess(X, y, cat_features_names, cont_features_names, standardize, seed_dataset_order=None):
     y = y[~X.duplicated()].copy()
     X = X[~X.duplicated()].copy()
     # categorical features
@@ -264,6 +264,11 @@ def preprocess(X, y, cat_features_names, cont_features_names, standardize):
         X[cont_features_names] = X[cont_features_names].astype(float)
     # we will drop 0 variance features
     X = X.dropna(axis=1, how='all')
+    if seed_dataset_order is not None:
+        X = X.sample(frac=1, random_state=seed_dataset_order)
+        y = y.loc[X.index]
+        X = X.reset_index(drop=True)
+        y = y.reset_index(drop=True)
     return X, y
 
 
@@ -282,6 +287,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
     def __init__(
             self,
             dataset_id: Optional[int | list[int]] = None,
+            seed_dataset_order: Optional[int] = None,
             task_id: Optional[int | list[int]] = None,
             task_repeat: int | list[int] = 0,
             task_fold: int | list[int] = 0,
@@ -296,6 +302,8 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             dataset_id (Optional[int | list[int]], optional): OpenML dataset ID(s) to load directly.
                 Cannot be used together with task_id. If list, creates multiple experiments
                 with different datasets. Defaults to None.
+            seed_dataset_order (Optional[int], optional): Seed for shuffling the datasets.
+                This can affect algorithms sensitive to feature order. Defaults to None, which means no shuffling.
             task_id (Optional[int | list[int]], optional): OpenML task ID(s) to load with proper
                 train/test splits. Cannot be used together with dataset_id. If list, creates
                 multiple experiments with different tasks. Defaults to None.
@@ -315,6 +323,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         """
         super().__init__(**kwargs)
         self.dataset_id = dataset_id
+        self.seed_dataset_order = seed_dataset_order
         self.task_id = task_id
         self.task_repeat = task_repeat if task_repeat else [0]
         self.task_fold = task_fold if task_fold else [0]
@@ -330,6 +339,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         if self.parser is None:
             raise ValueError('Parser must be set before calling _add_arguments_to_parser')
         self.parser.add_argument('--dataset_id', type=int, nargs='*', default=self.dataset_id)
+        self.parser.add_argument('--seed_dataset_order', type=int, nargs='*', default=self.seed_dataset_order)
         self.parser.add_argument('--task_id', type=int, nargs='*', default=self.task_id)
         self.parser.add_argument('--task_repeat', type=int, nargs='*', default=self.task_repeat)
         self.parser.add_argument('--task_fold', type=int, nargs='*', default=self.task_fold)
@@ -339,6 +349,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.dataset_id = args.dataset_id
+        self.seed_dataset_order = args.seed_dataset_order
         self.task_id = args.task_id
         self.task_repeat = args.task_repeat
         self.task_fold = args.task_fold
@@ -350,6 +361,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         combination_names = super()._get_combinations_names()
         combination_names.extend([
             'dataset_id',
+            'seed_dataset_order',
             'task_id',
             'task_repeat',
             'task_fold',
@@ -366,6 +378,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
     ):
         dataset_id = combination['dataset_id']
+        seed_dataset_order = combination['seed_dataset_order']
         task_id = combination['task_id']
         task_repeat = combination['task_repeat']
         task_fold = combination['task_fold']
@@ -402,7 +415,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         n_classes = len(y.unique())
         dataset_name = dataset.name
         # we will preprocess the data always in the same way
-        X, y = preprocess(X, y, cat_features_names, cont_features_names, standardize)
+        X, y = preprocess(X, y, cat_features_names, cont_features_names, standardize, seed_dataset_order)
         # log to mlflow to facilitate analysis
         if mlflow_run_id is not None:
             mlflow.log_params({
