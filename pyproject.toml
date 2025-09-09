@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cohirf"
-version = "2.0"
+version = "2.1"
 description = """cohirf"""
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
@@ -28,34 +28,32 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
+    "plotly",
+    "mlflow",
+    "psycopg2-binary",
+    "distributed",
+    "dask-jobqueue",
+    "tqdm",
+    "optuna-integration",
+    "func-timeout",
+    "memory-profiler",
     "matplotlib",
     "numpy",
     "pandas",
     "scikit-learn",
+    "scikit-posthocs",
     "scipy",
     "seaborn",
     "openml",
     "ipykernel",
     "ipywidgets",
     "optuna",
+    "dask",
     "dask-ml",
     "zarr",
+    "graphviz",
+    "pytest",
 ]
 
 [project.urls]
 "Source code" = "https://github.com/BrunoBelucci/cohirf"
-
-[project.optional-dependencies]
-test = [
-  "pytest",
-]
-docs = [
-  "sphinx",
-  "sphinx-rtd-theme",
-]
-all = [
-    "cohirf[test]",
-    "cohirf[docs]",
-]
-
-
