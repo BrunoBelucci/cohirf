@@ -55,8 +55,14 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
 
     def run_one_batch(self, X_representatives, i):
         n_samples = X_representatives.shape[0]
+        n_batches = n_samples // self.batch_size
+        last_batch_i = n_batches - 1
         start = i * self.batch_size
-        end = min((i + 1) * self.batch_size, n_samples)
+        # the last batch might be larger
+        if i == last_batch_i:
+            end = n_samples
+        else:
+            end = (i + 1) * self.batch_size
         indexes = np.arange(start, end)
         X_batch = X_representatives[indexes]
         child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), i])
@@ -96,20 +102,24 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
 
     def run_one_epoch(self, X_representatives):
         n_samples = X_representatives.shape[0]
-        n_batches = n_samples // self.batch_size
-        n_batches = n_batches - 1  # we will always leave one batch for the last epoch
+        n_batches = n_samples // self.batch_size  # this might leave some samples out, they will be added to the last batch and we might have a larger batch
+        n_batches = n_batches - 1  # we will always leave one batch for the last epoch 
         save_batch_size = self.batch_size
         if n_batches == 0:
-            # it is the last epoch, we will run the last batch with all the remaining samples
+            # last epoch (every sample fits in one batch, we run one batch with all the final samples and stop)
             n_batches = 1
             self.batch_size = n_samples
+            batches_i = np.array([0])
             last_epoch = True
         else:
-            # we still have at least more than one batch to run
+            # we leave one random batch for the last epoch
+            batches_i = np.arange(n_batches + 1)
+            leave_out_i = self.random_state.integers(0, n_batches + 1)
+            batches_i = np.delete(batches_i, leave_out_i)
             last_epoch = False
 
         parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)
-        results = parallel(delayed(self.run_one_batch)(X_representatives, i) for i in range(n_batches))
+        results = parallel(delayed(self.run_one_batch)(X_representatives, i) for i in batches_i)
         all_parents, all_labels, all_representatives_indexes, all_n_clusters = zip(*results)
         all_parents = list(all_parents)
         all_labels = list(all_labels)
@@ -118,15 +128,20 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
 
         self.batch_size = save_batch_size  # restore the batch size
         if not last_epoch:
-            # we need to add the last batch representatives_indexes and n_clusters
-            last_representatives_indexes = np.arange(n_batches * self.batch_size, n_samples)
-            last_n_clusters = len(last_representatives_indexes)
-            last_parents = last_representatives_indexes
-            last_labels = np.arange(last_n_clusters)
-            all_representatives_indexes.append(last_representatives_indexes)
-            all_n_clusters.append(last_n_clusters)
-            all_parents.append(last_parents)
-            all_labels.append(last_labels)
+            # we need to add the batch that we left to representatives_indexes and n_clusters
+            start = leave_out_i * self.batch_size
+            if leave_out_i == n_batches: # if we left the last batch
+                end = n_samples
+            else:
+                end = (leave_out_i + 1) * self.batch_size
+            left_representatives_indexes = np.arange(start, end)
+            left_n_clusters = len(left_representatives_indexes)
+            left_parents = left_representatives_indexes
+            left_labels = np.arange(left_n_clusters)
+            all_representatives_indexes.insert(leave_out_i, left_representatives_indexes)
+            all_n_clusters.insert(leave_out_i, left_n_clusters)
+            all_parents.insert(leave_out_i, left_parents)
+            all_labels.insert(leave_out_i, left_labels)
 
         if self.hierarchy_strategy == "parents":
             all_parents = np.concatenate(all_parents)
@@ -207,7 +222,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
 
         if self.batch_size is None:
             # we will use self.n_batches to determine the batch size
-            self.batch_size = n_samples // self.n_batches
+            self.batch_size = np.ceil(n_samples / self.n_batches).astype(int)
             if self.batch_size == 0:
                 raise ValueError(
                     "The number of samples is less than the number of batches. Please increase the number of samples "
@@ -251,11 +266,12 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         representatives_local_indexes = representatives_absolute_indexes
         X_representatives = X
         i = 0
-        stop = False
+        last_epoch = False
         n_clusters = 0
+        len_representatives_cluster_assignments = 1
         self.representatives_iter_ = []
-        # stop when we have run with n_batches == 1
-        while not stop and i < self.max_epochs:
+        # stop when we have run with n_batches == 1 or when we have not changed the representatives or when we reach max_epochs
+        while not last_epoch and i < self.max_epochs and len_representatives_cluster_assignments != n_clusters:
             if self.verbose > 0:
                 print(f"Starting epoch {i}")
 
@@ -266,13 +282,15 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
                 new_local_parents,
                 new_local_labels,
                 new_n_clusters,
-                stop,
+                last_epoch,
             ) = self.run_one_epoch(X_representatives)
 
             if self.hierarchy_strategy == "parents":
+                len_representatives_cluster_assignments = len(new_local_parents)
                 new_absolute_parents = representatives_absolute_indexes[new_local_parents]
                 parents = self.update_parents(parents, representatives_absolute_indexes, new_absolute_parents)
             elif self.hierarchy_strategy == "labels":
+                len_representatives_cluster_assignments = len(new_local_labels)
                 self.labels_ = update_labels(
                     self.labels_,
                     representatives_absolute_indexes,
