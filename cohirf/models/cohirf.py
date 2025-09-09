@@ -149,6 +149,17 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
                     step.set_params(random_seed=random_seed)
         else:
             raise ValueError(f"base_model {self.base_model} is not valid.")
+        
+        if hasattr(base_model, "n_clusters"):
+            n_clusters = getattr(base_model, "n_clusters")
+            if n_clusters > X.shape[0]:
+                if self.verbose:
+                    print(
+                        f"Warning: base_model n_clusters ({n_clusters}) is larger than the number of samples"
+                        f" ({X.shape[0]}). Setting n_clusters to {X.shape[0]}."
+                    )
+                base_model.set_params(n_clusters=X.shape[0])
+
         return base_model
 
     def sampling_transform_X(self, X, child_random_state):
