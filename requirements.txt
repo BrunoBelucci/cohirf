@@ -39,7 +39,6 @@ google-auth==2.40.3
 graphene==3.4.3
 graphql-core==3.2.6
 graphql-relay==3.2.0
-graphviz @ file:///home/conda/feedstock_root/build_artifacts/python-graphviz_1749998426524/work
 greenlet==3.2.4
 gunicorn==23.0.0
 h11==0.16.0
