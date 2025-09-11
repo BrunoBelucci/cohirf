@@ -206,6 +206,13 @@ class ClusteringExperiment(BaseExperiment, ABC):
             model = deepcopy(model)
             model.set_params(**model_params)
         if hasattr(model, 'n_jobs'):
+            # note that I have thested and at least in linux (in my machine) setting these env variables actually works
+            # and limits the number of threads used by each process, I am not sure on how effective this is in Windows
+            # or MacOS or other systems, maybe we should set them externally before launching the script to be sure.
+            # Also I have tested them when doing hpo, so maybe they work because we are spawning other processes when
+            # using optuna or similar libraries? Not sure if they work when only running a simple experiment.
+            # We can check with the following script: python hpo_classification_clustering_experiment.py --model BatchCoHiRF-SC-SRGF --experiment_name sfni-BatchCoHiRF-SC-SRGF-no-limit --n_jobs 10 --hpo_framework optuna --n_trials 20 --sampler tpe --pruner none --direction maximize --hpo_metric adjusted_rand --n_samples 1000 --n_classes 5 --n_informative 3 --class_sep 5.196152422706632 --n_random 1000 --seed_dataset 0 --hpo_seed 0
+            # and comparing it with the same command but adding OMP_NUM_THREADS=12 OPENBLAS_NUM_THREADS=12 before "python" and/or --max_threads 10 at the end
             if max_threads is not None:
                 threads_per_process = max(1, max_threads // n_jobs)
                 # Set environment variables
