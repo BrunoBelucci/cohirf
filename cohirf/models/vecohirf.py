@@ -1,6 +1,7 @@
 from typing import Optional, Literal
 from cohirf.models.cohirf import BaseCoHiRF
 import numpy as np
+import pandas as pd
 
 
 class VeCoHiRF(BaseCoHiRF):
@@ -10,7 +11,6 @@ class VeCoHiRF(BaseCoHiRF):
         cohirf_model: type[BaseCoHiRF] | list[type[BaseCoHiRF]] = BaseCoHiRF,
         cohirf_kwargs: Optional[dict] | list[dict] = None,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
-        features_groups: Optional[list[list[int]]] = None,
         use_medoid_consensus_per_group: bool = True,
         max_iter: int = 100,
         verbose: bool = False,
@@ -21,23 +21,21 @@ class VeCoHiRF(BaseCoHiRF):
         ] = "closest_overall",
         automatically_get_labels: bool = True,
         n_jobs: int = 1,
+        save_path: bool = False,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
         self.hierarchy_strategy = hierarchy_strategy
-        if features_groups is None:
-            raise ValueError("features_groups must be provided")
-        self.features_groups = features_groups
         self.use_medoid_consensus_per_group = use_medoid_consensus_per_group
         self.max_iter = max_iter
         self.verbose = verbose
         self.transform_once_per_iteration = False
-        self.repetitions = len(features_groups)
         self.n_samples_representative = n_samples_representative
         self._random_state = random_state
         self.representative_method = representative_method
         self.automatically_get_labels = automatically_get_labels
         self.n_jobs = n_jobs
+        self.save_path = save_path
 
     def run_one_repetition(self, X_representative, i_group): # pyright: ignore[reportIncompatibleMethodOverride]
         if self.verbose:
@@ -110,3 +108,23 @@ class VeCoHiRF(BaseCoHiRF):
 
             new_representatives_local_indexes = np.array(new_representatives_local_indexes)
             return new_representatives_local_indexes
+
+    def fit( # type: ignore
+        self,
+        X: pd.DataFrame | np.ndarray,
+        features_groups: list[list[int]],
+        y=None,
+        sample_weight=None,
+    ):
+        self.features_groups = features_groups
+        self.repetitions = len(features_groups)
+        return super().fit(X, y)
+
+    def fit_predict(self, X, features_groups: list[list[int]], y=None, sample_weight=None): # type: ignore
+        self.fit(X, features_groups, y, sample_weight)
+        if not self.automatically_get_labels:
+            self.get_labels()
+        if self.labels_ is None:
+            raise ValueError("Something went wrong, please check the code.")
+        return self.labels_
+    
