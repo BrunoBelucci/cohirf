@@ -41,6 +41,8 @@ class VeCoHiRF(BaseCoHiRF):
         if self.verbose:
             print("Starting i_group", i_group)
 
+        child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), i_group])
+
         features = self.features_groups[i_group]
         X_group = X_representative[:, features]
 
@@ -57,6 +59,10 @@ class VeCoHiRF(BaseCoHiRF):
         # update max_iter of cohirf_instance if needed (1 by default)
         if "max_iter" not in cohirf_kwargs:
             cohirf_kwargs["max_iter"] = 1
+
+        if "random_state" not in cohirf_kwargs:
+            cohirf_kwargs["random_state"] = child_random_state
+
         cohirf_instance = cohirf_model(**cohirf_kwargs)
         labels = cohirf_instance.fit_predict(X_group)
         return labels
@@ -127,4 +133,3 @@ class VeCoHiRF(BaseCoHiRF):
         if self.labels_ is None:
             raise ValueError("Something went wrong, please check the code.")
         return self.labels_
-    
