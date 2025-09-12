@@ -19,6 +19,44 @@ import os
 from warnings import warn
 
 
+def calculate_scores(calculate_metrics_even_if_too_many_clusters, n_clusters, X, y_true, y_pred, scores):
+    results = {}
+    if not calculate_metrics_even_if_too_many_clusters:
+            if n_clusters > 0.5 * X.shape[0]:
+                warn(f"Too many clusters ({n_clusters}) for dataset with {X.shape[0]} samples. Skipping metric calculation. If you want to calculate metrics anyway, set `calculate_metrics_even_if_too_many_clusters` to True.")
+                return results  # Avoid calculating scores if too many clusters (they are probably not meaningful)
+    for score_name, score_fn in scores.items():
+        if callable(score_fn):
+            if score_name == 'homogeneity_completeness_v_measure':
+                homogeneity, completeness, v_measure = score_fn(y_true, y_pred) # type: ignore
+                results['homogeneity'] = homogeneity
+                results['completeness'] = completeness
+                results['v_measure'] = v_measure
+            elif score_name == 'silhouette' or score_name == 'silhouette_1000':
+                try:
+                    results['silhouette'] = score_fn(X, y_pred) # type: ignore
+                except ValueError:
+                    results['silhouette'] = -1
+            elif score_name == 'calinski_harabasz_score':
+                try:
+                    results['calinski_harabasz_score'] = score_fn(X, y_pred) # type: ignore
+                except ValueError:
+                    results['calinski_harabasz_score'] = -1
+            elif score_name == 'davies_bouldin_score':
+                try:
+                    results['davies_bouldin_score'] = score_fn(X, y_pred) # type: ignore
+                except ValueError:
+                    results['davies_bouldin_score'] = 1e3 # type: ignore
+            elif score_name == 'inertia_score':
+                try:
+                    results['inertia_score'] = score_fn(X, y_pred) # type: ignore
+                except ValueError:
+                    results['inertia_score'] = -1
+            else:
+                results[score_name] = score_fn(y_true, y_pred) # type: ignore
+    return results
+
+
 def inertia_score(X, y):
     """
     Calculate the inertia score for a clustering result.
@@ -271,42 +309,10 @@ class ClusteringExperiment(BaseExperiment, ABC):
         X = kwargs['load_data_return']['X']
         y_true = kwargs['load_data_return']['y']
         y_pred = kwargs['fit_model_return']['y_pred']
-        n_clusters = len(np.unique(y_pred))
-        results = {"n_clusters_": n_clusters}
         calculate_metrics_even_if_too_many_clusters = unique_params["calculate_metrics_even_if_too_many_clusters"]
-        if not calculate_metrics_even_if_too_many_clusters:
-            if n_clusters > 0.5 * X.shape[0]:
-                warn(f"Too many clusters ({n_clusters}) for dataset with {X.shape[0]} samples. Skipping metric calculation. If you want to calculate metrics anyway, set `calculate_metrics_even_if_too_many_clusters` to True.")
-                return results  # Avoid calculating scores if too many clusters (they are probably not meaningful)
-        for score_name, score_fn in scores.items():
-            if callable(score_fn):
-                if score_name == 'homogeneity_completeness_v_measure':
-                    homogeneity, completeness, v_measure = score_fn(y_true, y_pred) # type: ignore
-                    results['homogeneity'] = homogeneity
-                    results['completeness'] = completeness
-                    results['v_measure'] = v_measure
-                elif score_name == 'silhouette' or score_name == 'silhouette_1000':
-                    try:
-                        results['silhouette'] = score_fn(X, y_pred) # type: ignore
-                    except ValueError:
-                        results['silhouette'] = -1
-                elif score_name == 'calinski_harabasz_score':
-                    try:
-                        results['calinski_harabasz_score'] = score_fn(X, y_pred) # type: ignore
-                    except ValueError:
-                        results['calinski_harabasz_score'] = -1
-                elif score_name == 'davies_bouldin_score':
-                    try:
-                        results['davies_bouldin_score'] = score_fn(X, y_pred) # type: ignore
-                    except ValueError:
-                        results['davies_bouldin_score'] = 1e3 # type: ignore
-                elif score_name == 'inertia_score':
-                    try:
-                        results['inertia_score'] = score_fn(X, y_pred) # type: ignore
-                    except ValueError:
-                        results['inertia_score'] = -1
-                else:
-                    results[score_name] = score_fn(y_true, y_pred) # type: ignore
+        n_clusters = len(np.unique(y_pred))
+        results = calculate_scores(calculate_metrics_even_if_too_many_clusters, n_clusters, X, y_true, y_pred, scores)
+        results["n_clusters_"] = n_clusters
         return results
 
     def _log_run_results(self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id=None, 
