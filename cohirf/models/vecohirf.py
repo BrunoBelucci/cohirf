@@ -2,6 +2,7 @@ from typing import Optional, Literal
 from cohirf.models.cohirf import BaseCoHiRF
 import numpy as np
 import pandas as pd
+from ml_experiments.utils import update_recursively
 
 
 class VeCoHiRF(BaseCoHiRF):
@@ -10,6 +11,8 @@ class VeCoHiRF(BaseCoHiRF):
         self,
         cohirf_model: type[BaseCoHiRF] | list[type[BaseCoHiRF]] = BaseCoHiRF,
         cohirf_kwargs: Optional[dict] | list[dict] = None,
+        cohirf_kwargs_shared: Optional[dict] = None,
+        priority_to_shared_kwargs: bool = True,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
         use_medoid_consensus_per_group: bool = True,
         max_iter: int = 100,
@@ -25,6 +28,8 @@ class VeCoHiRF(BaseCoHiRF):
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
+        self.cohirf_kwargs_shared = cohirf_kwargs_shared if cohirf_kwargs_shared is not None else {}
+        self.priority_to_shared_kwargs = priority_to_shared_kwargs
         self.hierarchy_strategy = hierarchy_strategy
         self.use_medoid_consensus_per_group = use_medoid_consensus_per_group
         self.max_iter = max_iter
@@ -56,9 +61,13 @@ class VeCoHiRF(BaseCoHiRF):
         else:
             cohirf_kwargs = self.cohirf_kwargs
 
-        # update max_iter of cohirf_instance if needed (1 by default)
-        if "max_iter" not in cohirf_kwargs:
-            cohirf_kwargs["max_iter"] = 1
+        if self.cohirf_kwargs_shared:
+            if self.priority_to_shared_kwargs:
+                # shared kwargs may override specific kwargs
+                cohirf_kwargs = update_recursively(cohirf_kwargs, self.cohirf_kwargs_shared)
+            else:
+                # specific kwargs may override shared kwargs
+                cohirf_kwargs = update_recursively(self.cohirf_kwargs_shared, cohirf_kwargs)
 
         if "random_state" not in cohirf_kwargs:
             cohirf_kwargs["random_state"] = child_random_state
