@@ -1,6 +1,6 @@
 from ml_experiments.hpo_experiment import HPOExperiment
 from ml_experiments.base_experiment import BaseExperiment
-from ml_experiments.utils import flatten_dict, unflatten_dict, update_recursively
+from ml_experiments.utils import flatten_any, unflatten_any, update_recursively
 from optuna import Study, Trial
 from abc import abstractmethod
 from typing import Optional
@@ -77,7 +77,7 @@ class HPOClusteringExperiment(HPOExperiment):
 	) -> dict:
         random_generator = kwargs["before_fit_model_return"]["random_generator"]
         seed_model = int(random_generator.integers(0, 2**31 - 1))
-        flatten_search_space = flatten_dict(search_space)
+        flatten_search_space = flatten_any(search_space)
         trial = study.ask(flatten_search_space)
         trial_number = trial.number
         trial_key = "_".join([str(value) for value in combination.values()])
@@ -102,10 +102,11 @@ class HPOClusteringExperiment(HPOExperiment):
 
         # update the model parameters in unique_params
         trial_params = trial.params.copy()
-        trial_params = unflatten_dict(trial_params)
         unique_params = unique_params.copy()
         model_params = unique_params["model_params"]
+        model_params = flatten_any(model_params)
         model_params = update_recursively(model_params, trial_params)
+        model_params = unflatten_any(model_params)
         unique_params["model_params"] = model_params
 
         # update the seed_model in combination
