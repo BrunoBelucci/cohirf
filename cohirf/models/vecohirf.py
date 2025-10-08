@@ -72,6 +72,12 @@ class VeCoHiRF(BaseCoHiRF):
         if "random_state" not in cohirf_kwargs:
             cohirf_kwargs["random_state"] = child_random_state
 
+        if "n_jobs" not in cohirf_kwargs:
+            # divide n_jobs among children if possible
+            n_jobs = self.n_jobs // self.repetitions
+            n_jobs = max(1, n_jobs)
+            cohirf_kwargs["n_jobs"] = n_jobs
+
         cohirf_instance = cohirf_model(**cohirf_kwargs)
         labels = cohirf_instance.fit_predict(X_group)
         return labels
