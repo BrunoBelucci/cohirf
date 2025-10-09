@@ -331,6 +331,17 @@ class ClusteringExperiment(BaseExperiment, ABC):
 
         mlflow.log_params(log_params, run_id=mlflow_run_id)
 
+        log_metrics = {}
+        load_model_return = kwargs.get('load_model_return', {})
+        if 'model' in load_model_return:
+            model = load_model_return["model"]
+            if hasattr(model, 'n_iter_'):
+                log_metrics["n_iter_"] = model.n_iter_
+            if hasattr(model, 'n_epoch_'):
+                log_metrics["n_epoch_"] = model.n_epoch_
+
+        mlflow.log_metrics(log_metrics, run_id=mlflow_run_id)
+
     def _on_exception_or_train_end(
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
     ):
