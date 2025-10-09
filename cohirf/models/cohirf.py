@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 import optuna
 import pandas as pd
 from sklearn.pipeline import Pipeline
+from cohirf.models.scsrgf import SpectralSubspaceRandomization
 
 
 def update_labels(
@@ -139,6 +140,16 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
                 elif min_samples is None and min_cluster_size > X.shape[0]:
                     # in this case min_samples is equal to min_cluster_size by default
                     base_model.set_params(min_samples=X.shape[0])
+            if isinstance(base_model, SpectralSubspaceRandomization):
+                params = base_model.get_params()
+                knn = params.get("knn", None)
+                sc_n_clusters = params.get("sc_n_clusters", None)
+                if knn is not None and knn >= X.shape[0]:
+                    # if knn is larger than the number of samples, set it to number of samples
+                    base_model.set_params(knn=X.shape[0])
+                if sc_n_clusters is not None and sc_n_clusters > X.shape[0]:
+                    # if n_clusters is larger than the number of samples, set it to number of samples
+                    base_model.set_params(sc_n_clusters=X.shape[0])
         elif isinstance(self.base_model, Pipeline):
             base_model = self.base_model
             base_model.set_params(**self.base_model_kwargs)
