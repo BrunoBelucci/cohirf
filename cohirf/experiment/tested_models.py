@@ -271,6 +271,35 @@ models_dict = {
             )
         ],
     ),
+    "BatchCoHiRF-SC-SRGF-2": (
+        BatchCoHiRF,
+        dict(
+            cohirf_model=BaseCoHiRF,
+            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, max_iter=1, n_features=1.0),
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                repetitions=optuna.distributions.IntDistribution(2, 10),
+                base_model_kwargs=dict(
+                    n_similarities=optuna.distributions.IntDistribution(10, 30),
+                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                    sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
+                ),
+            )
+        ),
+        [
+            dict(
+                cohirf_kwargs=dict(
+                    repetitions=5,
+                    base_model_kwargs=dict(
+                        n_similarities=20,
+                        sampling_ratio=0.5,
+                        sc_n_clusters=8,
+                    ),
+                )
+            )
+        ],
+    ),
     Clique.__name__: (
         Clique,
         dict(),
