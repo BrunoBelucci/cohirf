@@ -6,6 +6,7 @@ from cohirf.models.cohirf import BaseCoHiRF, CoHiRF, update_labels, get_labels_f
 from joblib import Parallel, delayed
 import dask.array as da
 import dask.dataframe as dd
+from sklearn.model_selection import KFold, StratifiedKFold
 
 
 class BatchCoHiRF(ClusterMixin, BaseEstimator):
@@ -15,8 +16,9 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         cohirf_model: type[BaseCoHiRF] = BaseCoHiRF,
         cohirf_kwargs: Optional[dict] = None,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
-        batch_size: Optional[int] = None,
         n_batches: int = 10,
+        batch_sample_strategy: Literal["random", "sequential", "stratified"] = "random",
+        batch_size: Optional[int] = None,
         max_epochs: int = 100,
         verbose: bool = False,
         n_jobs: int = 1,
@@ -29,6 +31,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         self.hierarchy_strategy = hierarchy_strategy
         self.batch_size = batch_size
         self.n_batches = n_batches
+        self.batch_sample_strategy = batch_sample_strategy
         self.max_epochs = max_epochs
         self.verbose = verbose
         self.n_jobs = n_jobs
@@ -54,16 +57,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             raise ValueError("random_state must be an integer or None.")
 
     def run_one_batch(self, X_representatives, i):
-        n_samples = X_representatives.shape[0]
-        n_batches = n_samples // self.batch_size
-        last_batch_i = n_batches - 1
-        start = i * self.batch_size
-        # the last batch might be larger
-        if i == last_batch_i:
-            end = n_samples
-        else:
-            end = (i + 1) * self.batch_size
-        indexes = np.arange(start, end)
+        indexes = self._batches_indexes[i]
         X_batch = X_representatives[indexes]
         child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), i])
 
@@ -102,19 +96,31 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
 
     def run_one_epoch(self, X_representatives):
         n_samples = X_representatives.shape[0]
-        n_batches = n_samples // self.batch_size  # this might leave some samples out, they will be added to the last batch and we might have a larger batch
-        n_batches = n_batches - 1  # we will always leave one batch for the last epoch 
-        save_batch_size = self.batch_size
-        if n_batches == 0:
+        n_batches = (
+            n_samples // self.batch_size
+        )  # this might create batches with slightly different sizes (+/- 1 sample)
+        if n_batches <= 1:
             # last epoch (every sample fits in one batch, we run one batch with all the final samples and stop)
             n_batches = 1
-            self.batch_size = n_samples
+            self._batches_indexes = [np.arange(n_samples)]
             batches_i = np.array([0])
             last_epoch = True
         else:
-            # we leave one random batch for the last epoch
-            batches_i = np.arange(n_batches + 1)
-            leave_out_i = self.random_state.integers(0, n_batches + 1)
+            # we will leave one batch out for the last epoch
+            if self.batch_sample_strategy == "random":
+                kfold = KFold(n_splits=n_batches, shuffle=True, random_state=self.random_state.integers(0, int(1e6)))
+                self._batches_indexes = [test_index for _, test_index in kfold.split(np.arange(n_samples))]
+            elif self.batch_sample_strategy == "sequential":
+                kfold = KFold(n_splits=n_batches, shuffle=False, random_state=None)
+                self._batches_indexes = [test_index for _, test_index in kfold.split(np.arange(n_samples))]
+            elif self.batch_sample_strategy == "stratified":
+                kfold = StratifiedKFold(n_splits=n_batches, shuffle=True, random_state=self.random_state.integers(0, int(1e6)))
+                self._batches_indexes = [test_index for _, test_index in kfold.split(np.arange(n_samples), self.y_representatives_)]
+            else:
+                raise ValueError(f"Unknown batch_sample_strategy: {self.batch_sample_strategy}")
+
+            batches_i = np.arange(n_batches)
+            leave_out_i = self.random_state.integers(0, n_batches)
             batches_i = np.delete(batches_i, leave_out_i)
             last_epoch = False
 
@@ -126,15 +132,9 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         all_representatives_indexes = list(all_representatives_indexes)
         all_n_clusters = list(all_n_clusters)
 
-        self.batch_size = save_batch_size  # restore the batch size
         if not last_epoch:
             # we need to add the batch that we left to representatives_indexes and n_clusters
-            start = leave_out_i * self.batch_size
-            if leave_out_i == n_batches: # if we left the last batch
-                end = n_samples
-            else:
-                end = (leave_out_i + 1) * self.batch_size
-            left_representatives_indexes = np.arange(start, end)
+            left_representatives_indexes = self._batches_indexes[leave_out_i]
             left_n_clusters = len(left_representatives_indexes)
             left_parents = left_representatives_indexes
             left_labels = np.arange(left_n_clusters)
@@ -157,32 +157,20 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
 
         all_representatives_indexes = np.concatenate(all_representatives_indexes)
         all_n_clusters = sum(all_n_clusters)
+
+        # fix indices to return in the original order
+        unsorted_indexes = np.concatenate(self._batches_indexes)
+        sorted_indexes = np.argsort(unsorted_indexes)
+        if all_parents is not None:
+            all_parents = all_parents[sorted_indexes]
+        if all_labels is not None:
+            all_labels = all_labels[sorted_indexes]
+
         return all_representatives_indexes, all_parents, all_labels, all_n_clusters, last_epoch
 
     def update_parents(self, old_parents, old_representatives_absolute_indexes, new_absolute_parents):
         old_parents[old_representatives_absolute_indexes] = new_absolute_parents
         return old_parents
-
-    # def get_all_parents_indexes(self, parents, representative_index):
-    #     all_indexes = set()
-    #     indexes_to_append = [representative_index]
-    #     first = True
-    #     while len(indexes_to_append) > 0:  # the representative_index itself will always be in the list
-    #         all_indexes.update(indexes_to_append)
-    #         indexes_to_append = np.where(np.isin(parents, indexes_to_append))[0]
-    #         if first:
-    #             first = False
-    #             indexes_to_append = np.setdiff1d(indexes_to_append, representative_index, assume_unique=True)
-    #     return list(all_indexes)
-
-    # def get_labels_from_parents(self, parents, representative_indexes):
-    #     if self.verbose:
-    #         print("Getting labels from parents")
-    #     labels = np.empty(parents.shape[0], dtype=int)
-    #     for i, representative_index in enumerate(representative_indexes):
-    #         all_indexes = self.get_all_parents_indexes(parents, representative_index)
-    #         labels[all_indexes] = i
-    #     return labels
 
     def get_X_representatives(self, X_representatives, representatives_local_indexes):
         # by indexing with the local indexes we avoid the need to index from the whole array again
@@ -190,6 +178,9 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         # and when we have already less samples than the batch size (X_representatives will be converted to a
         # numpy array just once)
         X_representatives = X_representatives[representatives_local_indexes]
+
+        if self.batch_sample_strategy == "stratified":
+            self.y_representatives_ = self.y_[representatives_local_indexes]
 
         if isinstance(X_representatives, da.Array):
             n_samples = X_representatives.shape[0]
@@ -218,11 +209,19 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         elif isinstance(X, dd.DataFrame):
             X = X.to_dask_array(lengths=(self.batch_size, -1))
 
+        if self.batch_sample_strategy == "stratified":
+            if y is None:
+                raise ValueError("y must be provided when using stratified batch sampling.")
+            if isinstance(y, pd.Series) or isinstance(y, pd.DataFrame)  :
+                self.y_ = y.to_numpy().ravel()
+            elif isinstance(y, dd.Series) or isinstance(y, dd.DataFrame):
+                self.y_ = y.to_dask_array(lengths=(self.batch_size,)).compute().ravel()
+
         n_samples = X.shape[0]
 
         if self.batch_size is None:
             # we will use self.n_batches to determine the batch size
-            self.batch_size = np.ceil(n_samples / self.n_batches).astype(int)
+            self.batch_size = n_samples // self.n_batches
             if self.batch_size == 0:
                 raise ValueError(
                     "The number of samples is less than the number of batches. Please increase the number of samples "

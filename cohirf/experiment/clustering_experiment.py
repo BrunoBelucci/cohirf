@@ -17,6 +17,7 @@ from ml_experiments.utils import update_recursively, profile_memory, profile_tim
 import json
 import os
 from warnings import warn
+from cohirf.models.batch_cohirf import BatchCoHiRF
 
 
 def calculate_scores(calculate_metrics_even_if_too_many_clusters, n_clusters, X, y_true, y_pred, scores):
@@ -297,7 +298,11 @@ class ClusteringExperiment(BaseExperiment, ABC):
     ):
         model = kwargs['load_model_return']['model']
         X = kwargs['load_data_return']['X']
-        y_pred = model.fit_predict(X)
+        if not isinstance(model, BatchCoHiRF):
+            y_pred = model.fit_predict(X)
+        else:
+            y = kwargs['load_data_return'].get('y', None)
+            y_pred = model.fit_predict(X, y)
         return {'y_pred': y_pred}
 
     @profile_time(enable_based_on_attribute="profile_time")
