@@ -8,7 +8,7 @@ This is the main code for CoHiRF, which is in current development.
 We recommend using a virtual environment created with conda from the project package-list.txt with the following command (this way we ensure that we have for example the correct version of python):
 
 ```bash
-conda create -n cohirf --file package-list.txt
+conda create -n cohirf --file package-list.txt -c conda-forge
 ```
 
 Then, activate the environment:

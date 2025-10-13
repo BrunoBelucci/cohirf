@@ -17,7 +17,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         cohirf_kwargs: Optional[dict] = None,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
         n_batches: int = 10,
-        batch_sample_strategy: Literal["random", "sequential", "stratified"] = "random",
+        batch_sample_strategy: Literal["random", "sequential", "stratified"] = "sequential",
         batch_size: Optional[int] = None,
         max_epochs: int = 100,
         verbose: bool = False,

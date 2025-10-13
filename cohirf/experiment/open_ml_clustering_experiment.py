@@ -8,226 +8,29 @@ import pandas as pd
 import openml
 from cohirf.experiment.clustering_experiment import ClusteringExperiment
 from cohirf.experiment.tested_models import models_dict as default_models_dict
-from cohirf.models.cohirf import CoHiRF, BaseCoHiRF
-from cohirf.models.batch_cohirf import BatchCoHiRF
 import optuna
-from sklearn.cluster import DBSCAN, KMeans
-from sklearn.kernel_approximation import RBFSampler
+from ml_experiments.utils import update_recursively
 
 
 models_dict = default_models_dict.copy()
-# n_features can be 1, so we re-declare here to change the upper limit from 0.6 to 1
-models_dict.update(
-    {
-        CoHiRF.__name__: (
-            CoHiRF,
-            dict(),
-            dict(
-                n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                repetitions=optuna.distributions.IntDistribution(2, 10),
-                kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
-            ),
-            [
-                dict(
-                    n_features=0.3,
-                    repetitions=5,
-                    kmeans_n_clusters=3,
-                ),
-            ],
-        ),
-        "CoHiRF-KernelRBF": (
-            BaseCoHiRF,
-            dict(
-                base_model=KMeans,
-                transform_method=RBFSampler,
-                transform_kwargs=dict(n_components=500),
-                representative_method="rbf",
-            ),
-            dict(
-                n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                repetitions=optuna.distributions.IntDistribution(2, 10),
-                base_model_kwargs=dict(
-                    n_clusters=optuna.distributions.IntDistribution(2, 5),
-                ),
-                transform_kwargs=dict(
-                    gamma=optuna.distributions.FloatDistribution(0.1, 30),
-                ),
-            ),
-            [
-                dict(
-                    n_features=0.3,
-                    repetitions=5,
-                    base_model_kwargs=dict(
-                        n_clusters=3,
-                    ),
-                    transform_kwargs=dict(
-                        gamma=1.0,
-                    ),
-                )
-            ],
-        ),
-        "CoHiRF-DBSCAN": (
-            BaseCoHiRF,
-            dict(base_model=DBSCAN),
-            dict(
-                n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                repetitions=optuna.distributions.IntDistribution(1, 10),
-                base_model_kwargs=dict(
-                    eps=optuna.distributions.FloatDistribution(1e-1, 10),
-                    min_samples=optuna.distributions.IntDistribution(2, 50),
-                ),
-            ),
-            [
-                dict(
-                    n_features=0.3,
-                    repetitions=5,
-                    base_model_kwargs=dict(
-                        eps=0.5,
-                        min_samples=5,
-                    ),
-                ),
-            ],
-        ),
-        "BatchCoHiRF": (
-            BatchCoHiRF,
-            dict(),
-            dict(
-                cohirf_kwargs=dict(
-                    n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                    repetitions=optuna.distributions.IntDistribution(2, 10),
-                    kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
-                )
-            ),
-            [
-                dict(
-                    cohirf_kwargs=dict(
-                        n_features=0.3,
-                        repetitions=5,
-                        kmeans_n_clusters=3,
-                    )
-                ),
-            ],
-        ),
-        "BatchCoHiRF-1iter": (
-            BatchCoHiRF,
-            dict(cohirf_kwargs=dict(max_iter=1)),
-            dict(
-                cohirf_kwargs=dict(
-                    n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                    repetitions=optuna.distributions.IntDistribution(2, 10),
-                    kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
-                )
-            ),
-            [
-                dict(
-                    cohirf_kwargs=dict(
-                        n_features=0.3,
-                        repetitions=5,
-                        kmeans_n_clusters=3,
-                    )
-                ),
-            ],
-        ),
-        "BatchCoHiRF-DBSCAN": (
-            BatchCoHiRF,
-            dict(
-                cohirf_model=BaseCoHiRF,
-                cohirf_kwargs=dict(base_model=DBSCAN),
-            ),
-            dict(
-                cohirf_kwargs=dict(
-                    n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                    repetitions=optuna.distributions.IntDistribution(1, 10),
-                    base_model_kwargs=dict(
-                        eps=optuna.distributions.FloatDistribution(1e-1, 10),
-                        min_samples=optuna.distributions.IntDistribution(2, 50),
-                    ),
-                )
-            ),
-            [
-                dict(
-                    cohirf_kwargs=dict(
-                        n_features=0.3,
-                        repetitions=5,
-                        base_model_kwargs=dict(
-                            eps=0.5,
-                            min_samples=5,
-                        ),
-                    )
-                ),
-            ],
-        ),
-        "BatchCoHiRF-DBSCAN-1iter": (
-            BatchCoHiRF,
-            dict(
-                cohirf_model=BaseCoHiRF,
-                cohirf_kwargs=dict(base_model=DBSCAN, max_iter=1),
-            ),
-            dict(
-                cohirf_kwargs=dict(
-                    n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                    repetitions=optuna.distributions.IntDistribution(1, 10),
-                    base_model_kwargs=dict(
-                        eps=optuna.distributions.FloatDistribution(1e-1, 10),
-                        min_samples=optuna.distributions.IntDistribution(2, 50),
-                    ),
-                )
-            ),
-            [
-                dict(
-                    cohirf_kwargs=dict(
-                        n_features=0.3,
-                        repetitions=5,
-                        base_model_kwargs=dict(
-                            eps=0.5,
-                            min_samples=5,
-                        ),
-                    )
-                ),
-            ],
-        ),
-        "BatchCoHiRF-KernelRBF-1iter": (
-            BatchCoHiRF,
-            dict(
-                cohirf_model=BaseCoHiRF,
-                cohirf_kwargs=dict(
-                    base_model=KMeans,
-                    transform_method=RBFSampler,
-                    transform_kwargs=dict(n_components=500),
-                    representative_method="rbf",
-                    max_iter=1,
-                ),
-            ),
-            dict(
-                cohirf_kwargs=dict(
-                    n_features=optuna.distributions.FloatDistribution(0.1, 1),
-                    repetitions=optuna.distributions.IntDistribution(1, 10),
-                    base_model_kwargs=dict(
-                        n_clusters=optuna.distributions.IntDistribution(2, 5),
-                    ),
-                    transform_kwargs=dict(
-                        gamma=optuna.distributions.FloatDistribution(0.1, 30),
-                    ),
-                )
-            ),
-            [
-                dict(
-                    cohirf_kwargs=dict(
-                        n_features=0.3,
-                        repetitions=5,
-                        base_model_kwargs=dict(
-                            n_clusters=3,
-                        ),
-                        transform_kwargs=dict(
-                            gamma=1.0,
-                        ),
-                    ),
-                )
-            ],
-        ),
-    }
-)
+# n_features can be 1, so we re-declare here to change the upper limit from 0.6 to 1, except for SC-SRGF
+cohirf_models = [model_name for model_name in models_dict if model_name.startswith('CoHiRF') and model_name.find("SC-SRGF") == -1]
+for cohirf_model in cohirf_models:
+    model_cls = models_dict[cohirf_model][0]
+    model_params = models_dict[cohirf_model][1].copy()
+    search_space = models_dict[cohirf_model][2].copy()
+    search_space = update_recursively(search_space, dict(n_features=optuna.distributions.FloatDistribution(0.1, 1)))
+    default_values = models_dict[cohirf_model][3].copy()
+    models_dict[cohirf_model] = (model_cls, model_params, search_space, default_values)
 
+batch_cohirf_models = [model_name for model_name in models_dict if model_name.startswith('BatchCoHiRF') and model_name.find("SC-SRGF") == -1]
+for batch_cohirf_model in batch_cohirf_models:
+    model_cls = models_dict[batch_cohirf_model][0]
+    model_params = models_dict[batch_cohirf_model][1].copy()
+    search_space = models_dict[batch_cohirf_model][2].copy()
+    search_space = update_recursively(search_space, dict(cohirf_kwargs=dict(n_features=optuna.distributions.FloatDistribution(0.1, 1))))
+    default_values = models_dict[batch_cohirf_model][3].copy()
+    models_dict[batch_cohirf_model] = (model_cls, model_params, search_space, default_values)
 
 def preprocess(X, y, cat_features_names, cont_features_names, standardize, seed_dataset_order=None):
     y = y[~X.duplicated()].copy()

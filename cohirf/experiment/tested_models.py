@@ -4,13 +4,21 @@ from cohirf.models.irfllrr import IRFLLRR
 from cohirf.models.kmeansproj import KMeansProj
 from cohirf.models.proclus import Proclus
 from cohirf.models.scsrgf import SpectralSubspaceRandomization
-from cohirf.models.sklearn import (KMeans, OPTICS, DBSCAN, AgglomerativeClustering, SpectralClustering,
-                                                 MeanShift, AffinityPropagation, HDBSCAN)
+from cohirf.models.sklearn import (
+    KMeans,
+    OPTICS,
+    DBSCAN,
+    AgglomerativeClustering,
+    SpectralClustering,
+    MeanShift,
+    AffinityPropagation,
+    HDBSCAN,
+)
 from cohirf.models.batch_cohirf import BatchCoHiRF
 from cohirf.models.pseudo_kernel import PseudoKernelClustering
-from cohirf.models.WBMS import WBMS
-from sklearn.kernel_approximation import Nystroem, RBFSampler
+from sklearn.kernel_approximation import RBFSampler
 import optuna
+from ml_experiments.utils import update_recursively
 
 
 models_dict = {
@@ -125,26 +133,6 @@ models_dict = {
             )
         ],
     ),
-    "BatchCoHiRF-1iter": (
-        BatchCoHiRF,
-        dict(cohirf_kwargs=dict(max_iter=1)),
-        dict(
-            cohirf_kwargs=dict(
-                n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
-                repetitions=optuna.distributions.IntDistribution(2, 10),
-                kmeans_n_clusters=optuna.distributions.IntDistribution(2, 5),
-            )
-        ),
-        [
-            dict(
-                cohirf_kwargs=dict(
-                    n_features=0.3,
-                    repetitions=5,
-                    kmeans_n_clusters=3,
-                )
-            )
-        ],
-    ),
     "BatchCoHiRF-DBSCAN": (
         BatchCoHiRF,
         dict(
@@ -174,36 +162,7 @@ models_dict = {
             )
         ],
     ),
-    "BatchCoHiRF-DBSCAN-1iter": (
-        BatchCoHiRF,
-        dict(
-            cohirf_model=BaseCoHiRF,
-            cohirf_kwargs=dict(base_model=DBSCAN, max_iter=1),
-        ),
-        dict(
-            cohirf_kwargs=dict(
-                n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
-                repetitions=optuna.distributions.IntDistribution(1, 10),
-                base_model_kwargs=dict(
-                    eps=optuna.distributions.FloatDistribution(1e-1, 10),
-                    min_samples=optuna.distributions.IntDistribution(2, 50),
-                ),
-            )
-        ),
-        [
-            dict(
-                cohirf_kwargs=dict(
-                    n_features=0.3,
-                    repetitions=5,
-                    base_model_kwargs=dict(
-                        eps=0.5,
-                        min_samples=5,
-                    ),
-                )
-            )
-        ],
-    ),
-    "BatchCoHiRF-KernelRBF-1iter": (
+    "BatchCoHiRF-KernelRBF": (
         BatchCoHiRF,
         dict(
             cohirf_model=BaseCoHiRF,
@@ -212,7 +171,6 @@ models_dict = {
                 transform_method=RBFSampler,
                 transform_kwargs=dict(n_components=500),
                 representative_method="rbf",
-                max_iter=1,
             ),
         ),
         dict(
@@ -246,7 +204,7 @@ models_dict = {
         BatchCoHiRF,
         dict(
             cohirf_model=BaseCoHiRF,
-            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, max_iter=1, n_features=1.0),
+            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, n_features=1.0),
         ),
         dict(
             cohirf_kwargs=dict(
@@ -266,35 +224,6 @@ models_dict = {
                         n_similarities=20,
                         sampling_ratio=0.5,
                         sc_n_clusters=3,
-                    ),
-                )
-            )
-        ],
-    ),
-    "BatchCoHiRF-SC-SRGF-2": (
-        BatchCoHiRF,
-        dict(
-            cohirf_model=BaseCoHiRF,
-            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, max_iter=1, n_features=1.0),
-        ),
-        dict(
-            cohirf_kwargs=dict(
-                repetitions=optuna.distributions.IntDistribution(2, 10),
-                base_model_kwargs=dict(
-                    n_similarities=optuna.distributions.IntDistribution(10, 30),
-                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
-                    sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
-                ),
-            )
-        ),
-        [
-            dict(
-                cohirf_kwargs=dict(
-                    repetitions=5,
-                    base_model_kwargs=dict(
-                        n_similarities=20,
-                        sampling_ratio=0.5,
-                        sc_n_clusters=8,
                     ),
                 )
             )
@@ -472,3 +401,41 @@ models_dict = {
         [dict(n_clusters=15)],
     ),
 }
+
+model_name = "BatchCoHiRF-SC-SRGF"
+model_cls = models_dict[model_name][0]
+model_params = models_dict[model_name][1].copy()
+search_space = models_dict[model_name][2].copy()
+search_space = update_recursively(
+    search_space,
+    dict(cohirf_kwargs=dict(base_model_kwargs=dict(sc_n_clusters=optuna.distributions.IntDistribution(2, 30)))),
+)
+default_values = models_dict[model_name][3].copy()
+models_dict[model_name + "-2"] = (model_cls, model_params, search_space, default_values)
+
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = models_dict[model_name][1].copy()
+    model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1)))
+    search_space = models_dict[model_name][2].copy()
+    default_values = models_dict[model_name][3].copy()
+    models_dict[model_name + "-1iter"] = (model_cls, model_params, search_space, default_values)
+
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = models_dict[model_name][1].copy()
+    model_params = update_recursively(model_params, dict(batch_sample_strategy="random"))
+    search_space = models_dict[model_name][2].copy()
+    default_values = models_dict[model_name][3].copy()
+    models_dict[model_name + "-random"] = (model_cls, model_params, search_space, default_values)
+
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = models_dict[model_name][1].copy()
+    model_params = update_recursively(model_params, dict(batch_sample_strategy="stratified"))
+    search_space = models_dict[model_name][2].copy()
+    default_values = models_dict[model_name][3].copy()
+    models_dict[model_name + "-stratified"] = (model_cls, model_params, search_space, default_values)
