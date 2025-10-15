@@ -1,6 +1,4 @@
 from __future__ import annotations
-import argparse
-from itertools import product
 from typing import Optional
 import os
 import numpy as np
@@ -48,7 +46,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
     vs. random features, making it ideal for studying clustering performance under
     different signal-to-noise ratios and dimensionality settings.
     """
-    
+
     def __init__(
             self,
             *args,
@@ -58,9 +56,10 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             n_informative_features: Optional[int | list[int]] = None,
             pct_random_features: Optional[float | list[float]] = None,
             n_centers: int | list[int] = 3,
-            distances: float | list[float] = 1.0,
-            seeds_dataset: int | list[int] = 0,
-            seeds_unified: Optional[int | list[int]] = None,
+            distance: float | list[float] = 1.0,
+            std: float | list[float] = 1.0,
+            seed_dataset: int | list[int] = 0,
+            seed_unified: Optional[int | list[int]] = None,
             **kwargs
     ):
         """
@@ -86,6 +85,8 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             distances (float | list[float], optional): Distance parameter controlling cluster
                 separation. Larger values create more separated clusters. If list, creates multiple
                 experiments. Defaults to 1.0.
+            stds (float | list[float], optional): Standard deviation of the clusters. Larger values create more
+                dispersed clusters. If list, creates multiple experiments. Defaults to 1.0.
             seeds_dataset (int | list[int], optional): Random seed(s) for dataset generation.
                 If list, creates multiple experiments with different seeds. Defaults to 0.
             seeds_unified (Optional[int | list[int]], optional): Unified random seeds for
@@ -94,45 +95,31 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             **kwargs: Additional keyword arguments passed to parent class.
         """
         super().__init__(*args, **kwargs)
-        if isinstance(n_samples, int):
-            n_samples = [n_samples]
         self.n_samples = n_samples
-        if isinstance(n_features, int):
-            n_features = [n_features]
         self.n_features = n_features
-        if isinstance(n_random_features, int) or n_random_features is None:
-            n_random_features = [n_random_features] # type: ignore
         self.n_random_features = n_random_features
-        if isinstance(n_informative_features, int) or n_informative_features is None:
-            n_informative_features = [n_informative_features]  # type: ignore
         self.n_informative_features = n_informative_features
-        if isinstance(pct_random_features, float) or isinstance(pct_random_features, int) or pct_random_features is None:
-            pct_random_features = [pct_random_features]  # type: ignore
         self.pct_random_features = pct_random_features
-        if isinstance(n_centers, int):
-            n_centers = [n_centers]
         self.n_centers = n_centers
-        if isinstance(distances, float):
-            distances = [distances]
-        self.distances = distances
-        if isinstance(seeds_dataset, int):
-            seeds_dataset = [seeds_dataset]
-        self.seeds_dataset = seeds_dataset
-        if isinstance(seeds_unified, int) or seeds_unified is None:
-            seeds_unified = [seeds_unified]  # type: ignore
-        self.seeds_unified = seeds_unified
+        self.distance = distance
+        self.seed_dataset = seed_dataset
+        self.seed_unified = seed_unified
+        self.std = std
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
+        if self.parser is None:
+            raise ValueError("Parser must be set before adding arguments")
         self.parser.add_argument('--n_samples', type=int, default=self.n_samples, nargs='*')
         self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
         self.parser.add_argument('--n_random_features', type=int, default=self.n_random_features, nargs='*')
         self.parser.add_argument('--n_informative_features', type=int, default=self.n_informative_features, nargs='*')
         self.parser.add_argument('--pct_random_features', type=float, default=self.pct_random_features, nargs='*')
         self.parser.add_argument('--n_centers', type=int, default=self.n_centers, nargs='*')
-        self.parser.add_argument('--distances', type=float, default=self.distances, nargs='*')
-        self.parser.add_argument('--seeds_dataset', type=int, default=self.seeds_dataset, nargs='*')
-        self.parser.add_argument('--seeds_unified', type=int, default=self.seeds_unified, nargs='*')
+        self.parser.add_argument('--distance', type=float, default=self.distance, nargs='*')
+        self.parser.add_argument('--seed_dataset', type=int, default=self.seed_dataset, nargs='*')
+        self.parser.add_argument('--seed_unified', type=int, default=self.seed_unified, nargs='*')
+        self.parser.add_argument('--std', type=float, default=self.std, nargs='*')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -142,48 +129,38 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.n_informative_features = args.n_informative_features
         self.pct_random_features = args.pct_random_features
         self.n_centers = args.n_centers
-        self.distances = args.distances
-        self.seeds_dataset = args.seeds_dataset
-        self.seeds_unified = args.seeds_unified
+        self.distance = args.distance
+        self.seed_dataset = args.seed_dataset
+        self.seed_unified = args.seed_unified
+        self.std = args.std
         return args
 
-    def _get_combinations(self):
-        combination_names = ['model_nickname', 'seed_model', 'seed_dataset', 'seed_unified', 'n_samples', 'n_features',
-                             'n_centers', 'distance', 'n_random_features', 'pct_random_features', 'n_informative_features']
-        if self.combinations is None:
-            if not isinstance(self.seeds_unified, list):
-                raise ValueError('seeds_unified must be a list')
-            if not isinstance(self.distances, list):
-                raise ValueError('distances must be a list')
-            if not isinstance(self.n_random_features, list):
-                raise ValueError('n_random_features must be a list')
-            if not isinstance(self.pct_random_features, list):
-                raise ValueError('pct_random_features must be a list')
-            if not isinstance(self.n_informative_features, list):
-                raise ValueError('n_informative_features must be a list')
-            combinations = list(product(self.models_nickname, self.seeds_models, self.seeds_dataset, self.seeds_unified,
-                                        self.n_samples, self.n_features, self.n_centers, self.distances,
-                                        self.n_random_features, self.pct_random_features, self.n_informative_features))
-        else:
-            combinations = self.combinations
-            # ensure that combinations have at least the same length as combination_names
-            for combination in combinations:
-                if len(combination) != len(combination_names):
-                    raise ValueError(f'Combination {combination} does not have the same length as combination_names '
-                                     f'{combination_names}')
-        combinations = [list(combination) + [self.models_params[combination[0]]] + [self.fits_params[combination[0]]]
-                        for combination in combinations]
-        combination_names += ['model_params', 'fit_params']
-        unique_params = dict()
-        extra_params = dict(n_jobs=self.n_jobs, return_results=False, timeout_combination=self.timeout_combination,
-                            timeout_fit=self.timeout_fit)
-        return combinations, combination_names, unique_params, extra_params
+    def _get_combinations_names(self) -> list[str]:
+        combination_names = super()._get_combinations_names()
+        combination_names.extend(
+            [
+                "seed_dataset",
+                "seed_unified",
+                "n_samples",
+                "n_features",
+                "n_centers",
+                "distance",
+                "n_random_features",
+                "pct_random_features",
+                "n_informative_features",
+                "std",
+            ]
+        )
+        return combination_names
 
-    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+    def _load_data(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
         n_samples = combination['n_samples']
         n_features = combination['n_features']
         n_centers = combination['n_centers']
         distance = combination['distance']
+        std = combination['std']
         n_random_features = combination['n_random_features']
         n_informative_features = combination['n_informative_features']
         pct_random_features = combination['pct_random_features']
@@ -206,7 +183,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             n_informative_features = n_features
             n_random_features = 0
 
-        dataset_name = f'gaussian_{n_samples}_{n_informative_features}_{n_random_features}_{n_centers}_{distance}_{seed_dataset}'
+        dataset_name = f'gaussian_{n_samples}_{n_informative_features}_{n_random_features}_{n_centers}_{distance}_{std}_{seed_dataset}'
 
         # check if dataset is already saved and load it if it is
         dataset_dir = self.work_root_dir / dataset_name
@@ -222,7 +199,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
                 n_random_features=n_random_features,
                 n_centers=n_centers,
                 distance=distance,
-                std=1.0,  # standard deviation for the clusters
+                std=std,  # standard deviation for the clusters
                 seed=seed_dataset
             )
             # save on work_dir for later use
@@ -231,50 +208,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             np.save(y_file, y)
         return {'X': X, 'y': y, 'dataset_name': dataset_name}
 
-    def run_gaussian_experiment_combination(self, model_nickname: str, seed_model: int = 0, seed_dataset: int = 0,
-                                            seed_unified: Optional[int] = None,
-                                            model_params: Optional[dict] = None, fit_params: Optional[dict] = None,
-                                            n_samples: int = 100, n_features: int = 2, n_centers: int = 3,
-                                            distance: float = 1.0, n_random_features: Optional[int] = None,
-                                            pct_random_features: Optional[float] = None,
-                                            n_informative_features: Optional[int] = None,
-                                            n_jobs: int = 1, return_results: bool = True, log_to_mlflow: bool = False,
-                                            timeout_combination: Optional[int] = None,
-                                            timeout_fit: Optional[int] = None,
-                                            ):
-        combination = {
-            'model_nickname': model_nickname,
-            'seed_model': seed_model,
-            'seed_dataset': seed_dataset,
-            'seed_unified': seed_unified,
-            'model_params': model_params,
-            'fit_params': fit_params,
-            'n_samples': n_samples,
-            'n_features': n_features,
-            'n_centers': n_centers,
-            'distance': distance,
-            'n_random_features': n_random_features,
-            'pct_random_features': pct_random_features,
-            'n_informative_features': n_informative_features,
-        }
-        unique_params = {
-
-        }
-        extra_params = {
-            'n_jobs': n_jobs,
-            'return_results': return_results,
-            'timeout_combination': timeout_combination,
-            'timeout_fit': timeout_fit,
-        }
-        if log_to_mlflow:
-            return self._run_mlflow_and_train_model(combination=combination, unique_params=unique_params,
-                                                    extra_params=extra_params, return_results=return_results)
-        else:
-            return self._train_model(combination=combination, unique_params=unique_params, extra_params=extra_params,
-                                     return_results=return_results)
-
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    experiment = GaussianClusteringExperiment(parser=parser)
-    experiment.run()
+    experiment = GaussianClusteringExperiment()
+    experiment.run_from_cli()

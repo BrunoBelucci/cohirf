@@ -212,7 +212,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
 
         dataset_name = (f'classif_{n_samples}_{n_random}_{n_informative}_{n_redundant}_{n_repeated}_{n_classes}_'
                         f'{n_clusters_per_class}_{weights}_{flip_y}_{class_sep}_{hypercube}_{shift}_{scale}_{shuffle}_'
-                        f'{seed_dataset}_{add_outlier}')
+                        f'{seed_dataset}_{add_outlier}_{std_random}')
         dataset_dir = self.work_root_dir / dataset_name
         X_file = dataset_dir / 'X.npy'
         y_file = dataset_dir / 'y.npy'

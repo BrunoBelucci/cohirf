@@ -1,39 +1,46 @@
 import argparse
 from typing import Optional
-from ml_experiments.hpo_experiment import HPOExperiment
+from cohirf.experiment.hpo_clustering_experiment import HPOClusteringExperiment
 from cohirf.experiment.gaussian_clustering_experiment import GaussianClusteringExperiment
 
 
-class HPOGaussianClusteringExperiment(HPOExperiment, GaussianClusteringExperiment):
-    def get_hyperband_max_resources(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
-        raise NotImplementedError('Hyperband is not available for this experiment')
+class HPOGaussianClusteringExperiment(HPOClusteringExperiment, GaussianClusteringExperiment):
 
-    def _load_single_experiment(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
-        blob_clustering_experiment = GaussianClusteringExperiment(
-            n_samples=self.n_samples, n_features=self.n_features, n_centers=self.n_centers, distances=self.distances,
+    def _load_simple_experiment(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
+    ):
+        experiment = GaussianClusteringExperiment(
             # experiment parameters
-            experiment_name=self.experiment_name, create_validation_set=self.create_validation_set,
-            log_dir=self.log_dir, log_file_name=self.log_file_name, work_root_dir=self.work_root_dir,
-            save_root_dir=self.save_root_dir, clean_work_dir=self.clean_work_dir, clean_data_dir=False,
-            raise_on_fit_error=self.raise_on_fit_error, error_score=self.error_score, 
-            mlflow_tracking_uri=self.mlflow_tracking_uri, check_if_exists=self.check_if_exists, verbose=0
+            experiment_name=self.experiment_name,
+            log_dir=self.log_dir,
+            log_file_name=self.log_file_name,
+            work_root_dir=self.work_root_dir,
+            save_root_dir=self.save_root_dir,
+            clean_work_dir=self.clean_work_dir,
+            clean_data_dir=False,
+            raise_on_error=self.raise_on_error,
+            mlflow_tracking_uri=self.mlflow_tracking_uri,
+            check_if_exists=self.check_if_exists,
+            profile_memory=self.profile_memory,
+            profile_time=self.profile_time,
+            verbose=0,
         )
-        return blob_clustering_experiment
+        return experiment
 
-    def _load_data(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
+    def _load_data(
+        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
+    ):
         # load the data and save it to disk, but do not return it here
-        load_data_return = super()._load_data(combination=combination, unique_params=unique_params,
-                                              extra_params=extra_params, **kwargs)
-        if 'dataset_name' in load_data_return:
-            dataset_name = load_data_return['dataset_name']
-        else:
-            dataset_name = 'gaussian'
-        return {
-            'dataset_name': dataset_name
-        }
+        load_data_return = super()._load_data(
+            combination=combination,
+            unique_params=unique_params,
+            extra_params=extra_params,
+            mlflow_run_id=mlflow_run_id,
+            **kwargs,
+        )
+        return {}
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    experiment = HPOGaussianClusteringExperiment(parser=parser)
-    experiment.run()
+    experiment = HPOGaussianClusteringExperiment()
+    experiment.run_from_cli()
