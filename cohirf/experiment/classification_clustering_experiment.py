@@ -42,6 +42,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
             n_features_dataset: Optional[int | list[int]] = None,
             pct_random: Optional[float | list[float]] = None,
             add_outlier: bool = False,
+            std_random: float = 1.0,
             **kwargs
     ):
         """
@@ -81,6 +82,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
                 Alternative to specifying n_random directly. If list, creates multiple experiments.
                 Defaults to None.
             add_outlier (bool, optional): Whether to add outlier samples to the dataset. Defaults to False.
+            std_random (float, optional): Standard deviation for random features. Defaults to 1.0.
             **kwargs: Additional keyword arguments passed to parent class.
         """
         super().__init__(*args, **kwargs)
@@ -102,6 +104,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.n_features_dataset = n_features_dataset
         self.pct_random = pct_random
         self.add_outlier = add_outlier
+        self.std_random = std_random
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
@@ -125,6 +128,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument("--n_features_dataset", type=int, default=self.n_features_dataset, nargs="*")
         self.parser.add_argument('--pct_random', type=float, default=self.pct_random, nargs='*')
         self.parser.add_argument('--add_outlier', action='store_true')
+        self.parser.add_argument('--std_random', type=float, default=self.std_random)
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -146,6 +150,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         self.n_features_dataset = args.n_features_dataset
         self.pct_random = args.pct_random
         self.add_outlier = args.add_outlier
+        self.std_random = args.std_random
         return args
 
     def _get_combinations_names(self) -> list[str]:
@@ -170,6 +175,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
                 "n_features_dataset",
                 "pct_random",
                 "add_outlier",
+                "std_random",
             ]
         )
         return combination_names
@@ -195,6 +201,7 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
         n_features_dataset = combination["n_features_dataset"]
         pct_random = combination['pct_random']
         add_outlier = combination["add_outlier"]
+        std_random = combination["std_random"]
 
         if n_features_dataset is not None:
             if pct_random is not None:
@@ -227,6 +234,13 @@ class ClassificationClusteringExperiment(ClusteringExperiment):
                                        n_classes=n_classes, n_clusters_per_class=n_clusters_per_class, weights=weights,
                                        flip_y=flip_y, class_sep=class_sep, hypercube=hypercube, shift=shift,
                                        scale=scale, shuffle=shuffle, random_state=seed_dataset)
+            # re-scale the random features to have a given standard deviation
+            if n_random > 0:
+                if std_random != 1.0:
+                    random_features = X[:, -n_random:]
+                    random_features = (random_features - np.mean(random_features, axis=0)) / np.std(random_features, axis=0) * std_random
+                    X[:, -n_random:] = random_features
+            # save dataset
             os.makedirs(dataset_dir, exist_ok=True)
             np.save(X_file, X)
             np.save(y_file, y)
