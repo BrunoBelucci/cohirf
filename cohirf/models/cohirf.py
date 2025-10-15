@@ -71,6 +71,9 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         # base model parameters
         base_model: str | type[BaseEstimator] | Pipeline = "kmeans",
         base_model_kwargs: Optional[dict] = None,
+        # last model parameters
+        last_model: Optional[str | type[BaseEstimator] | Pipeline] = None,
+        last_model_kwargs: Optional[dict] = None,
         # sampling parameters
         n_features: int | float = 10,  # number of random features that will be sampled
         transform_method: Optional[str | type[TransformerMixin] | Pipeline] = None,
@@ -96,6 +99,8 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         self.save_path = save_path
         self.hierarchy_strategy = hierarchy_strategy
         self.automatically_get_labels = automatically_get_labels
+        self.last_model = last_model
+        self.last_model_kwargs = last_model_kwargs if last_model_kwargs is not None else {}
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -116,62 +121,62 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         else:
             raise ValueError("random_state must be an integer or None.")
 
-    def get_base_model(self, X, child_random_state):
+    def get_base_model(self, X, child_random_state, base_model, base_model_kwargs):
         random_seed = child_random_state.integers(0, 1e6)
         if isinstance(self.base_model, str):
-            if self.base_model == "kmeans":
-                base_model = KMeans(**self.base_model_kwargs, random_state=random_seed)
+            if base_model == "kmeans":
+                model = KMeans(**base_model_kwargs, random_state=random_seed)
             else:
-                raise ValueError(f"base_model {self.base_model} is not valid.")
-        elif isinstance(self.base_model, type) and issubclass(self.base_model, BaseEstimator):
-            base_model = self.base_model()
-            base_model.set_params(**self.base_model_kwargs)
-            if hasattr(base_model, "random_state"):
-                base_model.set_params(random_state=random_seed)
-            elif hasattr(base_model, "random_seed"):
-                base_model.set_params(random_seed=random_seed)
-            if isinstance(base_model, HDBSCAN):
-                params = base_model.get_params()
+                raise ValueError(f"base_model {base_model} is not valid.")
+        elif isinstance(self.base_model, type) and issubclass(base_model, BaseEstimator):
+            model = base_model()
+            model.set_params(**base_model_kwargs)
+            if hasattr(model, "random_state"):
+                model.set_params(random_state=random_seed)
+            elif hasattr(model, "random_seed"):
+                model.set_params(random_seed=random_seed)
+            if isinstance(model, HDBSCAN):
+                params = model.get_params()
                 min_samples = params.get("min_samples", None)
                 min_cluster_size = params.get("min_cluster_size")
                 if min_samples is not None and min_samples > X.shape[0]:
                     # if min_samples is larger than the number of samples, set it to the number of samples
-                    base_model.set_params(min_samples=X.shape[0])
+                    model.set_params(min_samples=X.shape[0])
                 elif min_samples is None and min_cluster_size > X.shape[0]:
                     # in this case min_samples is equal to min_cluster_size by default
-                    base_model.set_params(min_samples=X.shape[0])
-            if isinstance(base_model, SpectralSubspaceRandomization):
-                params = base_model.get_params()
+                    model.set_params(min_samples=X.shape[0])
+            if isinstance(model, SpectralSubspaceRandomization):
+                params = model.get_params()
                 knn = params.get("knn", None)
                 sc_n_clusters = params.get("sc_n_clusters", None)
                 if knn is not None and knn >= X.shape[0]:
                     # if knn is larger than the number of samples, set it to number of samples
-                    base_model.set_params(knn=X.shape[0])
+                    model.set_params(knn=X.shape[0])
                 if sc_n_clusters is not None and sc_n_clusters > X.shape[0]:
                     # if n_clusters is larger than the number of samples, set it to number of samples
-                    base_model.set_params(sc_n_clusters=X.shape[0])
-        elif isinstance(self.base_model, Pipeline):
-            base_model = self.base_model
-            base_model.set_params(**self.base_model_kwargs)
-            for step_name, step in base_model.steps:
+                    model.set_params(sc_n_clusters=X.shape[0])
+        elif isinstance(base_model, Pipeline):
+            model = base_model
+            model.set_params(**base_model_kwargs)
+            for step_name, step in model.steps:
                 if hasattr(step, "random_state"):
                     step.set_params(random_state=random_seed)
                 elif hasattr(step, "random_seed"):
                     step.set_params(random_seed=random_seed)
         else:
-            raise ValueError(f"base_model {self.base_model} is not valid.")
-        
-        if hasattr(base_model, "n_clusters"):
-            n_clusters = getattr(base_model, "n_clusters")
+            raise ValueError(f"base_model {base_model} is not valid.")
+
+        if hasattr(model, "n_clusters"):
+            n_clusters = getattr(model, "n_clusters")
             if n_clusters > X.shape[0]:
                 if self.verbose:
                     print(
                         f"Warning: base_model n_clusters ({n_clusters}) is larger than the number of samples"
                         f" ({X.shape[0]}). Setting n_clusters to {X.shape[0]}."
                     )
-                base_model.set_params(n_clusters=X.shape[0])
+                model.set_params(n_clusters=X.shape[0])
 
-        return base_model
+        return model
 
     def sampling_transform_X(self, X, child_random_state):
         random_seed = child_random_state.integers(0, 1e6)
@@ -259,7 +264,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             print("Starting repetition", repetition)
         child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), repetition])
         X_p = self.sample_X_j(X_representative, child_random_state)
-        base_model = self.get_base_model(X_p, child_random_state)
+        base_model = self.get_base_model(X_p, child_random_state, self.base_model, self.base_model_kwargs)
         labels = self.get_labels_from_base_model(base_model, X_p)
         if -1 in labels:
             # we will consider each noise label (-1 for DBSCAN/HDBSCAN) as a separate cluster
@@ -467,6 +472,47 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
 
             i += 1
 
+        if self.last_model is not None:
+            # one last clustering step but with a single run of last_model instead of the consensus with base_model
+            if self.verbose:
+                print("Final clustering with last_model")
+            X_representatives = X[representatives_absolute_indexes]
+            last_model = self.get_base_model(X_representatives, self.random_state, self.last_model, self.last_model_kwargs)
+            representatives_cluster_assignments = last_model.fit_predict(X_representatives)
+            new_n_clusters = len(np.unique(representatives_cluster_assignments))
+            unique_clusters_labels = np.arange(new_n_clusters)
+            new_representatives_local_indexes = self.choose_new_representatives(
+                X_representatives,
+                representatives_cluster_assignments,
+                unique_clusters_labels,
+            )
+            if self.hierarchy_strategy == "parents":
+                parents = self.update_parents(
+                    parents,
+                    representatives_absolute_indexes,  # old_representatives_absolute_indexes
+                    unique_clusters_labels,
+                    new_n_clusters,
+                    representatives_cluster_assignments,
+                    representatives_absolute_indexes[
+                        new_representatives_local_indexes
+                    ],  # new_representatives_absolute_indexes
+                )
+            elif self.hierarchy_strategy == "labels":
+                self.labels_ = update_labels(
+                    self.labels_,
+                    representatives_absolute_indexes,
+                    n_clusters,
+                    representatives_cluster_assignments,
+                    self.verbose,
+                )
+            else:
+                raise ValueError("hierarchy_strategy must be 'parents' or 'labels'")
+
+            representatives_absolute_indexes = representatives_absolute_indexes[new_representatives_local_indexes]
+            n_clusters = new_n_clusters
+            if self.save_path:
+                self.representatives_iter_.append(representatives_absolute_indexes)
+
         self.n_clusters_ = n_clusters
         self.parents_ = parents
         self.representatives_indexes_ = representatives_absolute_indexes
@@ -569,9 +615,9 @@ class CoHiRF(BaseCoHiRF):
         self.kmeans_max_iter = kmeans_max_iter
         self.kmeans_tol = kmeans_tol
 
-    def get_base_model(self, X, child_random_state):
+    def get_base_model(self, X, child_random_state, base_model, base_model_kwargs):
         random_seed = child_random_state.integers(0, 1e6)
-        if self.base_model == "kmeans":
+        if base_model == "kmeans":
             return KMeans(
                 n_clusters=self.kmeans_n_clusters,
                 init=self.kmeans_init,  # type: ignore
@@ -582,7 +628,7 @@ class CoHiRF(BaseCoHiRF):
                 random_state=random_seed,
             )
         else:
-            raise ValueError(f"base_model {self.base_model} is not valid.")
+            raise ValueError(f"base_model {base_model} is not valid.")
 
     @staticmethod
     def create_search_space():
