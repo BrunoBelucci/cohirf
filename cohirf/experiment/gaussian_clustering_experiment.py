@@ -5,7 +5,7 @@ import numpy as np
 from cohirf.experiment.open_ml_clustering_experiment import ClusteringExperiment
 
 
-def make_multivariate_normal(n_samples, n_informative_features, n_random_features, n_centers, distance, std, seed):
+def make_multivariate_normal(n_samples, n_informative_features, n_random_features, n_centers, distance, std, seed, standardize=False):
     rng = np.random.default_rng(seed)
     # Generate equally spaced centers using a regular simplex
     # Start with a random orthonormal basis in P dimensions
@@ -29,9 +29,12 @@ def make_multivariate_normal(n_samples, n_informative_features, n_random_feature
     X = np.vstack(X)
     y = np.array(y)
     # shuffle data
-    idx = np.random.permutation(n_samples * n_centers)
-    X = X[idx]
-    y = y[idx]
+    indexes = np.arange(X.shape[0])
+    rng.shuffle(indexes)
+    X = X[indexes]
+    y = y[indexes]
+    if standardize:
+        X = (X - X.mean(axis=0)) / X.std(axis=0)
     return X, y
 
 
@@ -48,19 +51,20 @@ class GaussianClusteringExperiment(ClusteringExperiment):
     """
 
     def __init__(
-            self,
-            *args,
-            n_samples: int | list[int] = 100,
-            n_features: int | list[int] = 10,
-            n_random_features: Optional[int | list[int] | list[None]] = None,
-            n_informative_features: Optional[int | list[int]] = None,
-            pct_random_features: Optional[float | list[float]] = None,
-            n_centers: int | list[int] = 3,
-            distance: float | list[float] = 1.0,
-            std: float | list[float] = 1.0,
-            seed_dataset: int | list[int] = 0,
-            seed_unified: Optional[int | list[int]] = None,
-            **kwargs
+        self,
+        *args,
+        n_samples: int | list[int] = 100,
+        n_features_dataset: int | list[int] = 10,
+        n_random_features: Optional[int | list[int] | list[None]] = None,
+        n_informative_features: Optional[int | list[int]] = None,
+        pct_random_features: Optional[float | list[float]] = None,
+        n_centers: int | list[int] = 3,
+        distance: float | list[float] = 1.0,
+        std: float | list[float] = 1.0,
+        seed_dataset: int | list[int] = 0,
+        seed_unified: Optional[int | list[int]] = None,
+        standardize: bool = False,
+        **kwargs,
     ):
         """
         Initialize the GaussianClusteringExperiment.
@@ -96,7 +100,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         """
         super().__init__(*args, **kwargs)
         self.n_samples = n_samples
-        self.n_features = n_features
+        self.n_features_dataset = n_features_dataset
         self.n_random_features = n_random_features
         self.n_informative_features = n_informative_features
         self.pct_random_features = pct_random_features
@@ -105,13 +109,14 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.seed_dataset = seed_dataset
         self.seed_unified = seed_unified
         self.std = std
+        self.standardize = standardize
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
         if self.parser is None:
             raise ValueError("Parser must be set before adding arguments")
         self.parser.add_argument('--n_samples', type=int, default=self.n_samples, nargs='*')
-        self.parser.add_argument('--n_features', type=int, default=self.n_features, nargs='*')
+        self.parser.add_argument("--n_features_dataset", type=int, default=self.n_features_dataset, nargs="*")
         self.parser.add_argument('--n_random_features', type=int, default=self.n_random_features, nargs='*')
         self.parser.add_argument('--n_informative_features', type=int, default=self.n_informative_features, nargs='*')
         self.parser.add_argument('--pct_random_features', type=float, default=self.pct_random_features, nargs='*')
@@ -120,11 +125,12 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument('--seed_dataset', type=int, default=self.seed_dataset, nargs='*')
         self.parser.add_argument('--seed_unified', type=int, default=self.seed_unified, nargs='*')
         self.parser.add_argument('--std', type=float, default=self.std, nargs='*')
+        self.parser.add_argument('--standardize', action='store_true', default=self.standardize)
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.n_samples = args.n_samples
-        self.n_features = args.n_features
+        self.n_features_dataset = args.n_features_dataset
         self.n_random_features = args.n_random_features
         self.n_informative_features = args.n_informative_features
         self.pct_random_features = args.pct_random_features
@@ -133,6 +139,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.seed_dataset = args.seed_dataset
         self.seed_unified = args.seed_unified
         self.std = args.std
+        self.standardize = args.standardize
         return args
 
     def _get_combinations_names(self) -> list[str]:
@@ -142,13 +149,14 @@ class GaussianClusteringExperiment(ClusteringExperiment):
                 "seed_dataset",
                 "seed_unified",
                 "n_samples",
-                "n_features",
+                "n_features_dataset",
                 "n_centers",
                 "distance",
                 "n_random_features",
                 "pct_random_features",
                 "n_informative_features",
                 "std",
+                "standardize",
             ]
         )
         return combination_names
@@ -157,7 +165,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
     ):
         n_samples = combination['n_samples']
-        n_features = combination['n_features']
+        n_features = combination["n_features_dataset"]
         n_centers = combination['n_centers']
         distance = combination['distance']
         std = combination['std']
@@ -166,6 +174,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         pct_random_features = combination['pct_random_features']
         seed_dataset = combination['seed_dataset']
         seed_unified = combination['seed_unified']
+        standardize = combination['standardize']
         if seed_unified is not None:
             seed_dataset = seed_unified
 
@@ -183,7 +192,7 @@ class GaussianClusteringExperiment(ClusteringExperiment):
             n_informative_features = n_features
             n_random_features = 0
 
-        dataset_name = f'gaussian_{n_samples}_{n_informative_features}_{n_random_features}_{n_centers}_{distance}_{std}_{seed_dataset}'
+        dataset_name = f'gaussian_{n_samples}_{n_informative_features}_{n_random_features}_{n_centers}_{distance}_{std}_{seed_dataset}_{standardize}'
 
         # check if dataset is already saved and load it if it is
         dataset_dir = self.work_root_dir / dataset_name
@@ -200,7 +209,8 @@ class GaussianClusteringExperiment(ClusteringExperiment):
                 n_centers=n_centers,
                 distance=distance,
                 std=std,  # standard deviation for the clusters
-                seed=seed_dataset
+                seed=seed_dataset,
+                standardize=standardize,
             )
             # save on work_dir for later use
             os.makedirs(dataset_dir, exist_ok=True)
