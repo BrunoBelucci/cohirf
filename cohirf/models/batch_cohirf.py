@@ -56,10 +56,9 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         else:
             raise ValueError("random_state must be an integer or None.")
 
-    def run_one_batch(self, X_representatives, i):
+    def run_one_batch(self, X_representatives, i, child_random_state):
         indexes = self._batches_indexes[i]
         X_batch = X_representatives[indexes]
-        child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), i])
 
         if isinstance(X_batch, da.Array):
             # if X_batch is a dask array, we need to compute it
@@ -124,8 +123,9 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             batches_i = np.delete(batches_i, leave_out_i)
             last_epoch = False
 
-        parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)
-        results = parallel(delayed(self.run_one_batch)(X_representatives, i) for i in batches_i)
+        parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")
+        child_random_states = self.random_state.spawn(len(batches_i))
+        results = parallel(delayed(self.run_one_batch)(X_representatives, i, child_random_states[i]) for i in batches_i)
         all_parents, all_labels, all_representatives_indexes, all_n_clusters = zip(*results)
         all_parents = list(all_parents)
         all_labels = list(all_labels)

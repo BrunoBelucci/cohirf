@@ -42,11 +42,9 @@ class VeCoHiRF(BaseCoHiRF):
         self.n_jobs = n_jobs
         self.save_path = save_path
 
-    def run_one_repetition(self, X_representative, i_group): # pyright: ignore[reportIncompatibleMethodOverride]
+    def run_one_repetition(self, X_representative, i_group, child_random_state): # pyright: ignore[reportIncompatibleMethodOverride]
         if self.verbose:
             print("Starting i_group", i_group)
-
-        child_random_state = np.random.default_rng([self.random_state.integers(0, int(1e6)), i_group])
 
         features = self.features_groups[i_group]
         X_group = X_representative[:, features]
