@@ -421,6 +421,24 @@ search_space = models_dict[model_name][2].copy()
 default_values = models_dict[model_name][3].copy()
 models_dict[model_name + "-1000"] = (model_cls, model_params, search_space, default_values)
 
+cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("CoHiRF")]
+for model_name in cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = models_dict[model_name][1].copy()
+    model_params = update_recursively(model_params, dict(consensus_strategy="top-down"))
+    search_space = models_dict[model_name][2].copy()
+    default_values = models_dict[model_name][3].copy()
+    models_dict[model_name + "-top-down"] = (model_cls, model_params, search_space, default_values)
+
+cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("CoHiRF")]
+for model_name in cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = models_dict[model_name][1].copy()
+    model_params = update_recursively(model_params, dict(consensus_strategy="top-down-inv"))
+    search_space = models_dict[model_name][2].copy()
+    default_values = models_dict[model_name][3].copy()
+    models_dict[model_name + "-top-down-inv"] = (model_cls, model_params, search_space, default_values)
+
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]

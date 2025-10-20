@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional
 import os
 import numpy as np
-from cohirf.experiment.open_ml_clustering_experiment import ClusteringExperiment
+from cohirf.experiment.open_ml_clustering_experiment import ClusteringExperiment, models_dict
 
 
 def make_multivariate_normal(n_samples, n_informative_features, n_random_features, n_centers, distance, std, seed, standardize=False):
@@ -110,6 +110,10 @@ class GaussianClusteringExperiment(ClusteringExperiment):
         self.seed_unified = seed_unified
         self.std = std
         self.standardize = standardize
+
+    @property
+    def models_dict(self):
+        return models_dict.copy()
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
