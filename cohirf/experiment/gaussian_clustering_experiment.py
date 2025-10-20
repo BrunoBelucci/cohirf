@@ -9,7 +9,7 @@ def make_multivariate_normal(n_samples, n_informative_features, n_random_feature
     rng = np.random.default_rng(seed)
     # Generate equally spaced centers using a regular simplex
     # Start with a random orthonormal basis in P dimensions
-    centers = np.random.randn(n_centers, n_informative_features)
+    centers = rng.standard_normal(size=(n_centers, n_informative_features))
     centers, _ = np.linalg.qr(centers.T)  # Orthonormalize columns
     centers = centers.T
     # Scale the simplex to achieve the desired pairwise distance
