@@ -290,7 +290,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         return ari
 
     def calculate_pairwise_ari(self, labels_i: np.ndarray):
-        aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+        aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
             delayed(adjusted_rand_score)(labels_i[:, i], labels_i[:, j])
             for i in range(labels_i.shape[1])
             for j in range(i + 1, labels_i.shape[1])
@@ -337,7 +337,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             # we continue until no repetition can be removed (removing any repetition does not lower the ARI below threshold)
             unique, codes = np.unique(labels_i, axis=0, return_inverse=True)
             while labels_i.shape[1] > 1:
-                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                     delayed(self.compute_ari_without_column)(codes, labels_i, i) for i in range(labels_i.shape[1])
                 )
                 aris = np.array(aris)
@@ -361,7 +361,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             # is redundant with the other ones
             unique, codes = np.unique(labels_i, axis=0, return_inverse=True)
             while labels_i.shape[1] > 1:
-                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                     delayed(self.compute_ari_without_column)(codes, labels_i, i) for i in range(labels_i.shape[1])
                 )
                 aris = np.array(aris)
@@ -379,7 +379,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         elif self.consensus_strategy == "top-down-approx":
             # approximate version of top-down where we only do one pass
             unique, codes = np.unique(labels_i, axis=0, return_inverse=True)
-            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                 delayed(self.compute_ari_without_column)(codes, labels_i, i) for i in range(labels_i.shape[1])
             )
             aris = np.array(aris)
@@ -391,7 +391,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         elif self.consensus_strategy == "top-down-inv-approx":
             # approximate version of top-down-inv where we only do one pass
             unique, codes = np.unique(labels_i, axis=0, return_inverse=True)
-            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                 delayed(self.compute_ari_without_column)(codes, labels_i, i) for i in range(labels_i.shape[1])
             )
             aris = np.array(aris)
@@ -407,7 +407,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             # Continue merging while we have columns and max ARI is above threshold
             while labels_i.shape[1] > 0:
                 # Calculate ARI between current consensus and each remaining column
-                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                     delayed(adjusted_rand_score)(codes, labels_i[:, col_idx]) 
                     for col_idx in range(labels_i.shape[1])
                 )
@@ -435,7 +435,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             # Continue merging while we have columns and min ARI is below threshold
             while labels_i.shape[1] > 0:
                 # Calculate ARI between current consensus and each remaining column
-                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+                aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                     delayed(adjusted_rand_score)(codes, labels_i[:, col_idx]) for col_idx in range(labels_i.shape[1])
                 )
                 aris = np.array(aris)
@@ -460,7 +460,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             unique, codes, labels_i = self.find_two_most_similar_repetitions(labels_i, self.consensus_threshold)
             # Merge remaining columns with current consensus if above threshold
             # Calculate ARI between current consensus and each remaining column
-            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                 delayed(adjusted_rand_score)(codes, labels_i[:, col_idx]) 
                 for col_idx in range(labels_i.shape[1])
             )
@@ -474,7 +474,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             unique, codes, labels_i = self.find_two_most_similar_repetitions(labels_i, self.consensus_threshold)
             # Merge remaining columns with current consensus if below threshold
             # Calculate ARI between current consensus and each remaining column
-            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+            aris = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
                 delayed(adjusted_rand_score)(codes, labels_i[:, col_idx]) 
                 for col_idx in range(labels_i.shape[1])
             )
@@ -489,14 +489,14 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         return unique, codes
 
     def get_representative_cluster_assignments(self, X_representative):
-        # run the repetitions in parallel using threads, which I think
-        # is better than processes because of the overhead of copying data to each process.
+        # run the repetitions in parallel using loky, which is finally more stable than threading
+        # I don't really understand why, but at least this works (even if may consume more memory)
         if self.verbose:
             print("Starting consensus assignment")
 
         child_random_states = self.random_state.spawn(self.repetitions)
 
-        labels_i = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")(
+        labels_i = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
             delayed(self.run_one_repetition)(X_representative, r, child_random_states[r]) for r in range(self.repetitions)
         )
         labels_i = np.array(labels_i).T
