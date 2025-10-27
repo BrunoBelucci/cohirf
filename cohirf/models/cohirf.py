@@ -488,7 +488,14 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
 
         return unique, codes
 
-    def get_representative_cluster_assignments(self, X_representative):
+    def get_representative_cluster_assignments(self, X, representatives_absolute_indexes):
+
+        X_representatives = X[representatives_absolute_indexes]
+
+        if self.transform_once_per_iteration:
+            # we transform once the data here
+            X_representatives = self.sampling_transform_X(X_representatives, self.random_state)
+
         # run the repetitions in parallel using loky, which is finally more stable than threading
         # I don't really understand why, but at least this works (even if may consume more memory)
         if self.verbose:
@@ -497,7 +504,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         child_random_states = self.random_state.spawn(self.repetitions)
 
         labels_i = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
-            delayed(self.run_one_repetition)(X_representative, r, child_random_states[r]) for r in range(self.repetitions)
+            delayed(self.run_one_repetition)(X_representatives, r, child_random_states[r]) for r in range(self.repetitions)
         )
         labels_i = np.array(labels_i).T
 
@@ -643,21 +650,15 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             if self.verbose:
                 print("Iteration", i)
 
-            X_representatives = X[representatives_absolute_indexes]
-
-            if self.transform_once_per_iteration:
-                # we transform once the data here
-                X_representatives = self.sampling_transform_X(X_representatives, self.random_state)
-
             # consensus assignment (it is here that we repeatedly apply our base model)
             representatives_cluster_assignments, new_n_clusters = self.get_representative_cluster_assignments(
-                X_representatives
+                X, representatives_absolute_indexes
             )
             unique_clusters_labels = np.arange(new_n_clusters)
 
             # using representative_method
             new_representatives_local_indexes = self.choose_new_representatives(
-                X_representatives,
+                X[representatives_absolute_indexes],
                 representatives_cluster_assignments,
                 unique_clusters_labels,
             )
