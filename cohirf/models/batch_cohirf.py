@@ -124,7 +124,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             last_epoch = False
 
         parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, prefer="threads")
-        child_random_states = self.random_state.spawn(len(batches_i))
+        child_random_states = self.random_state.spawn(len(batches_i) + 1)
         results = parallel(delayed(self.run_one_batch)(X_representatives, i, child_random_states[i]) for i in batches_i)
         all_parents, all_labels, all_representatives_indexes, all_n_clusters = zip(*results)
         all_parents = list(all_parents)
