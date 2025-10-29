@@ -21,6 +21,7 @@ class CSVClusteringExperiment(ClusteringExperiment):
             self,
             dataset_name: Optional[str | list[str]] = None,
             standardize: bool = False,
+            seed_dataset_order: Optional[int | list[int]] = None,
             **kwargs
     ):
         """
@@ -36,6 +37,7 @@ class CSVClusteringExperiment(ClusteringExperiment):
         super().__init__(**kwargs)
         self.dataset_name = dataset_name
         self.standardize = standardize
+        self.seed_dataset_order = seed_dataset_order
 
     @property
     def models_dict(self):
@@ -45,11 +47,13 @@ class CSVClusteringExperiment(ClusteringExperiment):
         super()._add_arguments_to_parser()
         self.parser.add_argument("--dataset_name", type=str, nargs="*")
         self.parser.add_argument('--standardize', action='store_true')
+        self.parser.add_argument('--seed_dataset_order', type=int, nargs="*")
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
         self.dataset_name = args.dataset_name
         self.standardize = args.standardize
+        self.seed_dataset_order = args.seed_dataset_order
         return args
 
     def _load_data(
@@ -61,6 +65,7 @@ class CSVClusteringExperiment(ClusteringExperiment):
         dataset_row = csv_data[csv_data['dataset_name'] == dataset_name]
         cat_features = dataset_row['cat_features'].values[0]
         standardize = unique_params["standardize"]
+        seed_dataset_order = combination["seed_dataset_order"]
         # transform nan to 'None'
         if pd.isna(cat_features):
             cat_features = 'None'
@@ -76,7 +81,7 @@ class CSVClusteringExperiment(ClusteringExperiment):
         cont_features_names = [feature for feature in X.columns if feature not in cat_features_names]
         n_classes = len(y.unique())
         # we will preprocess the data always in the same way
-        X, y = preprocess(X, y, cat_features_names, cont_features_names, standardize)
+        X, y = preprocess(X, y, cat_features_names, cont_features_names, standardize, seed_dataset_order)
         # log to mlflow to facilitate analysis
         mlflow_run_id = extra_params.get('mlflow_run_id', None)
         if mlflow_run_id is not None:
@@ -98,6 +103,7 @@ class CSVClusteringExperiment(ClusteringExperiment):
         combination_names.extend(
             [
                 "dataset_name",
+                "seed_dataset_order",
             ]
         )
         return combination_names
