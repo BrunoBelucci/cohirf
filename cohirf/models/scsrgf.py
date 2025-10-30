@@ -15,12 +15,14 @@ from sklearn.utils import check_random_state
 
 # and the code from snfpy
 
-def snf_sparse(W_list, K=20, t=20, alpha=1.0):
+def snf_sparse(W_list, K=20, t=20, alpha=1.0, verbose=False):
     C = len(W_list)
     m, n = W_list[0].shape
     is_sparse = issparse(W_list[0])
 
     # Normalize and symmetrize matrices
+    if verbose:
+        print("Normalizing and symmetrizing matrices...")
     for i in range(C):
         if is_sparse:
             # keepdims=True) -> already a scipy sparse matrix that keeps dims
@@ -30,14 +32,20 @@ def snf_sparse(W_list, K=20, t=20, alpha=1.0):
         W_list[i] = (W_list[i] + W_list[i].T) / 2
 
     # Find dominate set
+    if verbose:
+        print("Finding dominate sets...")
     new_W_list = [find_dominate_set_sparse(W, K) for W in W_list]
     Wsum = np.sum(W_list, axis=0)
 
+    if verbose:
+        print("Performing similarity network fusion...")
     for _ in range(t):
         Wall0 = [new_W @ ((Wsum - W) / (C - 1)) @ new_W.T for new_W, W in zip(new_W_list, W_list)]
         W_list = [bo_normalized(W0, alpha) for W0 in Wall0]
         Wsum = np.sum(W_list, axis=0)
 
+    if verbose:
+        print("Finalizing fused matrix...")
     W = Wsum / C
     if is_sparse:
         W = W / W.sum(axis=1)
@@ -67,10 +75,16 @@ def find_dominate_set_sparse(W, K):
     return new_W
 
 
-def knn_sparse(data, K):
+def knn_sparse(data, K, verbose=False):
     nearest_neighbors = NearestNeighbors(n_neighbors=K, n_jobs=-1)
+    if verbose:
+        print("Fitting nearest neighbors model...")
     nearest_neighbors.fit(data)
+    if verbose:
+        print("Computing k-nearest neighbors graph...")
     graph = nearest_neighbors.kneighbors_graph(data, mode='distance')
+    if verbose:
+        print("Computing sigma...")
     sigma = pairwise_distances(data).mean()
     graph.data = np.exp(-graph.data / (2 * sigma))
     return graph
@@ -89,7 +103,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             sc_n_init=10,
             sc_eigen_tol=0.0,
             sc_assign_labels='kmeans',
-            sc_verbose=False,
+            verbose=False,
             random_state=None,
     ):
         self.knn = knn
@@ -102,7 +116,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
         self.sc_n_init = sc_n_init
         self.sc_eigen_tol = sc_eigen_tol
         self.sc_assign_labels = sc_assign_labels
-        self.sc_verbose = sc_verbose
+        self.verbose = verbose
         self.random_state = random_state
         self.labels_ = None
 
@@ -112,24 +126,26 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
         random_state = check_random_state(self.random_state)
         all_matrices = []
         for i in range(self.n_similarities):
+            if self.verbose:
+                print(f"Computing similarity matrix {i + 1}/{self.n_similarities}")
             seq = random_state.permutation(X.shape[1])
             n_features = int(X.shape[1] * self.sampling_ratio)
             n_features = max(n_features, 1)  # Ensure at least one feature is selected
             X_i = X[:, seq[:n_features]]
-            similarity_matrix = knn_sparse(X_i, self.knn)
+            similarity_matrix = knn_sparse(X_i, self.knn, verbose=self.verbose)
             all_matrices.append(similarity_matrix)
 
-        fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha)
+        fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha, verbose=self.verbose)
         spectral_clustering = SpectralClustering(
             n_clusters=self.sc_n_clusters,
             eigen_solver=self.sc_eigen_solver,
             n_components=self.sc_n_components,
             n_init=self.sc_n_init,
-            affinity='precomputed',
+            affinity="precomputed",
             eigen_tol=self.sc_eigen_tol,
             assign_labels=self.sc_assign_labels,
-            verbose=self.sc_verbose,
-            random_state=self.random_state
+            verbose=self.verbose,
+            random_state=self.random_state,
         )
         self.labels_ = spectral_clustering.fit_predict(fused_matrix)
         return self
