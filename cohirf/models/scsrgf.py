@@ -35,28 +35,40 @@ def snf_sparse(W_list, K=20, t=20, alpha=1.0, verbose=False):
     if verbose:
         print("Finding dominate sets...")
     new_W_list = [find_dominate_set_sparse(W, K) for W in W_list]
-    Wsum = np.sum(W_list, axis=0)
+    if is_sparse:
+        Wsum = sum(W_list)
+    else:
+        Wsum = np.sum(W_list, axis=0)
 
     if verbose:
         print("Performing similarity network fusion...")
     for _ in range(t):
         Wall0 = [new_W @ ((Wsum - W) / (C - 1)) @ new_W.T for new_W, W in zip(new_W_list, W_list)]
-        W_list = [bo_normalized(W0, alpha) for W0 in Wall0]
-        Wsum = np.sum(W_list, axis=0)
+        W_list = [bo_normalized(W0, alpha, is_sparse) for W0 in Wall0]
+        if is_sparse:
+            Wsum = sum(W_list)
+        else:
+            Wsum = np.sum(W_list, axis=0)
 
     if verbose:
         print("Finalizing fused matrix...")
     W = Wsum / C
     if is_sparse:
         W = W / W.sum(axis=1)
+        W = W + W.T 
+        W.setdiag(W.diagonal() + 1)
+        W = W / 2
     else:
         W = W / W.sum(axis=1, keepdims=True)
-    W = (W + W.T + np.eye(n)) / 2
+        W = (W + W.T + np.eye(n)) / 2
     return W
 
 
-def bo_normalized(W, alpha=1):
-    W = W + alpha * np.eye(W.shape[0])
+def bo_normalized(W, alpha=1, is_sparse=False):
+    if is_sparse:
+        W.setdiag(W.diagonal() + alpha)
+    else:
+        W = W + alpha * np.eye(W.shape[0])
     return (W + W.T) / 2
 
 
@@ -66,7 +78,7 @@ def find_dominate_set_sparse(W, K):
         W_numpy = W.toarray()
     else:
         W_numpy = W
-    idx = np.argsort(-W_numpy, axis=1)[:, :K]
+    idx = np.argpartition(-W_numpy, K, axis=1)[:, :K]
     new_W = np.zeros_like(W_numpy)
     np.put_along_axis(new_W, idx, np.take_along_axis(W_numpy, idx, axis=1), axis=1)
     new_W = new_W / new_W.sum(axis=1, keepdims=True)
