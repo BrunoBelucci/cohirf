@@ -1,13 +1,13 @@
 from typing import Optional, Literal
-from cohirf.models.cohirf import BaseCoHiRF
+from cohirf.models.cohirf import BaseCoHiRF, get_consensus_labels, choose_new_representatives, compute_similarities, update_parents, get_labels_from_parents
 import numpy as np
 import pandas as pd
 from ml_experiments.utils import update_recursively
 from joblib import Parallel, delayed
-from functools import reduce
+from sklearn.base import BaseEstimator, ClusterMixin
 
 
-class MixCoHiRF(BaseCoHiRF):
+class MixCoHiRF(ClusterMixin, BaseEstimator):
 
     def __init__(
         self,
@@ -27,6 +27,11 @@ class MixCoHiRF(BaseCoHiRF):
         automatically_get_labels: bool = True,
         n_jobs: int = 1,
         save_path: bool = False,
+        # consensus parameters
+        consensus_strategy: Literal[
+            "factorize", "top-down", "top-down-approx", "bottom-up", "bottom-up-approx"
+        ] = "factorize",
+        consensus_threshold: float = 0.8,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
@@ -43,7 +48,26 @@ class MixCoHiRF(BaseCoHiRF):
         self.automatically_get_labels = automatically_get_labels
         self.n_jobs = n_jobs
         self.save_path = save_path
+        self.consensus_strategy = consensus_strategy
+        self.consensus_threshold = consensus_threshold
         self._representatives_absolute_indexes_i = None
+
+    @property
+    def random_state(self):
+        if self._random_state is None:
+            self._random_state = np.random.default_rng()
+        elif isinstance(self._random_state, int):
+            self._random_state = np.random.default_rng(self._random_state)
+        return self._random_state
+
+    @random_state.setter
+    def random_state(self, value):
+        if value is None:
+            self._random_state = np.random.default_rng()
+        elif isinstance(value, int):
+            self._random_state = np.random.default_rng(value)
+        else:
+            raise ValueError("random_state must be an integer or None.")
 
     def run_one_repetition(self, X_representative, i_group, child_random_state): # pyright: ignore[reportIncompatibleMethodOverride]
         if len(X_representative) == 0:
@@ -75,115 +99,152 @@ class MixCoHiRF(BaseCoHiRF):
 
         if "n_jobs" not in cohirf_kwargs:
             # divide n_jobs among children if possible
-            n_jobs = self.n_jobs // self.repetitions
+            n_jobs = self.n_jobs // self.n_agents_
             n_jobs = max(1, n_jobs)
             cohirf_kwargs["n_jobs"] = n_jobs
 
         cohirf_instance = cohirf_model(**cohirf_kwargs)
         labels = cohirf_instance.fit_predict(X_representative)
-        representatives_indexes = cohirf_instance.representatives_indexes_
-        return labels, representatives_indexes
+        return labels
 
-    def get_representative_cluster_assignments(self, X, representatives_absolute_indexes):
-        X_representatives = X[representatives_absolute_indexes]
-
-        if self.transform_once_per_iteration:
-            # we transform once the data here
-            X_representatives = self.sampling_transform_X(X_representatives, self.random_state)
+    def get_representative_cluster_assignments(
+        self,
+        X: np.ndarray,
+        agents_representatives_absolute_indexes: list[np.ndarray],
+        samples_groups: list[np.ndarray],
+        features_groups: list[np.ndarray],
+        union_representatives_absolute_indexes: np.ndarray,
+    ):
 
         if self.verbose:
             print("Starting consensus assignment")
 
-        child_random_states = self.random_state.spawn(self.repetitions)
-
-        # find local indexes for each agent (w.r.t. absolute indexes)
-        self._local_indexes_agent = []
-        for agent_i in range(self.repetitions):
-            if self._representatives_absolute_indexes_i is not None and self.medoid_strategy == "independent":
-                last_representatives_absolute_indexes_for_agent_i = self._representatives_absolute_indexes_i[agent_i]
-                available_samples_agent_i = np.array(set(last_representatives_absolute_indexes_for_agent_i) & set(self.samples_groups[agent_i]))
-            else:
-                available_samples_agent_i = self.samples_groups[agent_i]
-            _, local_indexes_agent_i, _ = np.intersect1d(representatives_absolute_indexes, available_samples_agent_i, assume_unique=True, return_indices=True)
-            self._local_indexes_agent.append(local_indexes_agent_i)
+        child_random_states = self.random_state.spawn(len(samples_groups))
 
         # run the repetitions in parallel using loky, which is finally more stable than threading
         # I don't really understand why, but at least this works (even if may consume more memory)
-        results = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
+        labels_i = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)(
             delayed(self.run_one_repetition)(
-                X_representatives[
-                    self._local_indexes_agent[agent_i],  # available samples
-                    self.features_groups[agent_i],  # available features
+                X[
+                    np.ix_(
+                        samples_groups[agent_i][agents_representatives_absolute_indexes[agent_i]],  # available samples
+                        features_groups[agent_i],  # available features
+                    )
                 ],
                 agent_i,
                 child_random_states[agent_i],
             )
-            for agent_i in range(self.repetitions)
+            for agent_i in range(len(samples_groups))
         )
-        labels_i, representatives_indexes_i = zip(*results)
 
-        n_samples = len(representatives_absolute_indexes)
-        for i in range(len(labels_i)):
+        n_samples = len(union_representatives_absolute_indexes)
+        for agent_i in range(len(labels_i)):
             labels = np.ones(n_samples, dtype=int) * -1
-            labels[self._local_indexes_agent[i]] = labels_i[i]
-            labels_i[i] = labels
+            agent_i_representatives_absolute_indexes = samples_groups[agent_i][
+                agents_representatives_absolute_indexes[agent_i]
+            ]
+            # put labels of agent_i where it has representatives
+            agent_i_representatives_local_indexes = np.intersect1d(
+                union_representatives_absolute_indexes,
+                agent_i_representatives_absolute_indexes,
+                assume_unique=True,
+                return_indices=True,
+            )[1]
+            labels[agent_i_representatives_local_indexes] = labels_i[agent_i]
+            labels_i[agent_i] = labels
 
         labels_i = np.array(labels_i).T
-
-        # representatives_indexes_i are local indexes (w.r.t. X_agent_i), we need to convert to absolute indexes
-        for i in range(len(representatives_indexes_i)):
-            absolute_indexes = representatives_absolute_indexes[self._local_indexes_agent[i]][representatives_indexes_i[i]]
-            representatives_indexes_i[i] = absolute_indexes
-
-        # factorize labels using numpy (codes are from 0 to n_clusters-1)
-        unique, codes = self.get_consensus_labels(labels_i)
-        if unique is None:
-            raise ValueError("Something went wrong, check your code!")
-
+        unique, codes = get_consensus_labels(labels_i, self.consensus_strategy, self.consensus_threshold, self.n_jobs, self.verbose)
         n_clusters = len(unique)
-        # we keep the list of the last representatives indexes for each agent in memory
-        self._representatives_absolute_indexes_i = representatives_indexes_i
         return codes, n_clusters
 
     def choose_new_representatives(
         self,
-        X_representatives,
-        new_representative_cluster_assignments,
-        new_unique_clusters_labels,
-    ):
+        X: np.ndarray,
+        agents_representatives_absolute_indexes: list[np.ndarray],
+        common_representatives_cluster_assignments: np.ndarray,
+        samples_groups: list[np.ndarray],
+        features_groups: list[np.ndarray],
+        union_representatives_absolute_indexes: np.ndarray,
+    ) -> list[np.ndarray]:
         if self.medoid_strategy == "shared":
-            return super().choose_new_representatives(
+            X_representatives = X[union_representatives_absolute_indexes]
+            common_new_representatives_local_indexes = choose_new_representatives(
                 X_representatives,
-                new_representative_cluster_assignments,
-                new_unique_clusters_labels,
+                common_representatives_cluster_assignments,
+                np.unique(common_representatives_cluster_assignments),
+                self.representative_method,
+                self.verbose,
+                self.random_state,
+                self.n_samples_representative,
             )
+            agents_new_representatives_local_indexes = []
+            # common_new_representatives_local_indexes are with respect to union_representatives_absolute_indexes
+            # we need to transform them to be with respect to each agent representative absolute indexes
+            common_new_representatives_absolute_indexes = union_representatives_absolute_indexes[
+                common_new_representatives_local_indexes
+            ]
+            for agent_i in range(len(samples_groups)):
+                agent_i_absolute_indexes = samples_groups[agent_i][agents_representatives_absolute_indexes[agent_i]]
+                agent_i_new_representatives_local_indexes = np.intersect1d(
+                    common_new_representatives_absolute_indexes,
+                    agent_i_absolute_indexes,
+                    assume_unique=True,
+                    return_indices=True,
+                )[2]
+                agents_new_representatives_local_indexes.append(agent_i_new_representatives_local_indexes)
+
+            return agents_new_representatives_local_indexes
         elif self.medoid_strategy == "rank":
-            new_representatives_local_indexes = []
-            for label in new_unique_clusters_labels:
+            X_representatives = X[union_representatives_absolute_indexes]
+            common_new_representatives_local_indexes = []
+            for label in np.unique(common_representatives_cluster_assignments):
                 if self.verbose:
                     print("Choosing new representative sample for cluster", label)
-                cluster_mask = new_representative_cluster_assignments == label
+                cluster_mask = common_representatives_cluster_assignments == label
                 X_cluster = X_representatives[cluster_mask]
                 X_cluster_indexes = np.where(cluster_mask)[0]
 
-                # sample a representative sample from the cluster
-                if self.n_samples_representative is not None:
-                    n_samples_representative = min(self.n_samples_representative, X_cluster.shape[0])
-                    sampled_indexes = self.random_state.choice(
-                        X_cluster.shape[0], size=n_samples_representative, replace=False
-                    )
-                    X_cluster = X_cluster[sampled_indexes]
-                    X_cluster_indexes = X_cluster_indexes[sampled_indexes]
+                # find local indexes in the cluster for each agent
+                agents_representatives_local_cluster_indexes = []
+                for agent_i in range(len(samples_groups)):
+                    agent_i_representatives_absolute_indexes = samples_groups[agent_i][
+                        agents_representatives_absolute_indexes[agent_i]
+                    ]
+                    agent_i_representatives_local_cluster_indexes = np.intersect1d(
+                        union_representatives_absolute_indexes[X_cluster_indexes],
+                        agent_i_representatives_absolute_indexes,
+                        assume_unique=True,
+                        return_indices=True,
+                    )[1]
+                    agents_representatives_local_cluster_indexes.append(agent_i_representatives_local_cluster_indexes)
+
+                # # sample a representative sample from the cluster, priotity to samples available for more agents
+                # NOT WORKING YET
+                # if self.n_samples_representative is not None:
+                #     # compute weights based on availability to agents
+                #     weights = np.zeros(X_cluster.shape[0])
+                #     for agent_i_representatives_local_cluster_indexes in agents_representatives_local_cluster_indexes:
+                #         weights[agent_i_representatives_local_cluster_indexes] += 1
+
+                #     weights /= weights.sum()
+
+                #     n_samples_representative = min(self.n_samples_representative, X_cluster.shape[0])
+                #     sampled_indexes = self.random_state.choice(
+                #         X_cluster.shape[0], size=n_samples_representative, replace=False, p=weights
+                #     )
+                #     X_cluster = X_cluster[sampled_indexes]
+                #     X_cluster_indexes = X_cluster_indexes[sampled_indexes]
 
                 new_representatives_local_indexes_ranks = []
-                for agent_i in range(len(self.features_groups)):
-                    X_group = X_cluster[self._local_indexes_agent[agent_i], self.features_groups[agent_i]]
-                    cluster_similarities = self.compute_similarities(X_group)
+                for agent_i in range(len(features_groups)):
+                    X_group = X_cluster[np.ix_(agents_representatives_local_cluster_indexes[agent_i], features_groups[agent_i])]
+                    cluster_similarities = compute_similarities(X_group, self.representative_method, self.verbose)
                     cluster_similarities_sum = cluster_similarities.sum(axis=0)
                     rank_of_most_similar_samples = np.argsort(cluster_similarities_sum)[::-1]  # reversed order: most similar first
                     # not all samples in X_cluster may be available for agent_i, so we complete missing ranks with len(X_cluster)
                     ranks = np.full(len(X_cluster), fill_value=len(X_cluster))
-                    ranks[self._local_indexes_agent[agent_i]] = rank_of_most_similar_samples
+                    ranks[agents_representatives_local_cluster_indexes[agent_i]] = rank_of_most_similar_samples
                     new_representatives_local_indexes_ranks.append(ranks)
 
                 # now we have a list of array of ranks, one per group
@@ -191,31 +252,95 @@ class MixCoHiRF(BaseCoHiRF):
                 # we sum the ranks to get a final rank and get the sample with the best overall rank
                 overall_ranks = new_representatives_local_indexes_ranks.sum(axis=0)
                 most_similar_sample_local_idx = X_cluster_indexes[overall_ranks.argmin()]
-                new_representatives_local_indexes.append(most_similar_sample_local_idx)
+                common_new_representatives_local_indexes.append(most_similar_sample_local_idx)
 
-            new_representatives_local_indexes = np.array(new_representatives_local_indexes)
-            return new_representatives_local_indexes
+            common_new_representatives_local_indexes = np.array(common_new_representatives_local_indexes)
+            agents_new_representatives_local_indexes = []
+
+            return agents_new_representatives_local_indexes
         elif self.medoid_strategy == "independent":
-            # simply union of each agent's medoids
-            new_representatives_local_indexes = reduce(np.union1d, *self._local_indexes_agent)
-            return new_representatives_local_indexes
+            agents_new_representatives_local_indexes = []
+            for agent_i in range(len(samples_groups)):
+                agent_i_representatives_local_indexes = np.intersect1d(
+                    union_representatives_absolute_indexes,
+                    samples_groups[agent_i][agents_representatives_absolute_indexes[agent_i]],
+                    assume_unique=True,
+                    return_indices=True,
+                )[1]
+                agent_i_new_representatives_cluster_assignments = common_representatives_cluster_assignments[
+                    agent_i_representatives_local_indexes
+                ]
+                agent_i_new_representatives_local_indexes = choose_new_representatives(
+                    X[
+                        np.ix_(
+                            samples_groups[agent_i][agents_representatives_absolute_indexes[agent_i]],  # available samples
+                            features_groups[agent_i],  # available features
+                        )
+                    ],
+                    agent_i_new_representatives_cluster_assignments,
+                    np.unique(agent_i_new_representatives_cluster_assignments),
+                    self.representative_method,
+                    self.verbose,
+                    self.random_state,
+                    self.n_samples_representative,
+                )
+                agents_new_representatives_local_indexes.append(agent_i_new_representatives_local_indexes)
+            return agents_new_representatives_local_indexes
         else:
             raise ValueError(f"Unknown medoid_strategy: {self.medoid_strategy}")
 
-    def fit( # type: ignore
+    def update_parents(
         self,
-        X: pd.DataFrame | np.ndarray,
-        features_groups: list[list[int]],
-        samples_groups: list[list[int]],
-        y=None,
-        sample_weight=None,
+        agents_parents: list[np.ndarray],
+        agents_representatives_absolute_indexes: list[np.ndarray],
+        common_representatives_cluster_assignments: np.ndarray,
+        agents_new_representatives_local_indexes: list[np.ndarray],
+        samples_groups: list[np.ndarray],
+        union_representatives_absolute_indexes: np.ndarray,
     ):
-        self.features_groups = features_groups
-        self.samples_groups = samples_groups
-        if len(self.features_groups) != len(self.samples_groups):
-            raise ValueError("features_groups and samples_groups must have the same length.")
-        self.repetitions = len(features_groups)
-        return super().fit(X, y)
+        for agent_i in range(len(agents_parents)):
+            agent_i_representatives_local_indexes = np.intersect1d(
+                union_representatives_absolute_indexes,
+                samples_groups[agent_i][agents_representatives_absolute_indexes[agent_i]],
+                assume_unique=True,
+                return_indices=True,
+            )[1]
+            agent_i_new_representatives_cluster_assignments = common_representatives_cluster_assignments[
+                agent_i_representatives_local_indexes
+            ]
+            agent_i_new_representatives_absolute_indexes = agents_representatives_absolute_indexes[agent_i][
+                agents_new_representatives_local_indexes[agent_i]
+            ]
+            agents_parents[agent_i] = update_parents(
+                agents_parents[agent_i],
+                agents_representatives_absolute_indexes[agent_i],
+                np.unique(agent_i_new_representatives_cluster_assignments),
+                agent_i_new_representatives_cluster_assignments,
+                agent_i_new_representatives_absolute_indexes,
+                self.verbose,
+            )
+        return agents_parents
+
+    def get_labels(self):
+        if self.hierarchy_strategy == "parents":
+            if self.agents_parents_ is None or self.agents_representatives_absolute_indexes_ is None:
+                raise ValueError("The model has not been fitted yet. Please call fit() before get_labels().")
+            labels = []
+            for agent_i in range(self.n_agents_):
+                agent_i_labels = get_labels_from_parents(
+                    self.agents_parents_[agent_i],
+                    self.agents_representatives_absolute_indexes_[agent_i],
+                    self.verbose,
+                )
+                labels.append(agent_i_labels)
+            self.labels_ = labels
+        # elif self.hierarchy_strategy == "labels":
+        #     if self.labels_ is None:
+        #         raise ValueError("The model has not been fitted yet. Please call fit() before get_labels().")
+        #     self.labels_ = self.labels_
+        else:
+            raise ValueError("hierarchy_strategy must be 'parents'")
+        return self.labels_
 
     def fit(  # type: ignore
         self,
@@ -225,9 +350,99 @@ class MixCoHiRF(BaseCoHiRF):
         y=None,
         sample_weight=None,
     ):
-        self.fit(X, features_groups, samples_groups, y, sample_weight)
-        if not self.automatically_get_labels:
-            self.get_labels()
-        if self.labels_ is None:
-            raise ValueError("Something went wrong, please check the code.")
-        return self.labels_
+        if self.verbose:
+            print("Starting fit")
+
+        # we will work with numpy (arrays) for speed
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+
+        self.n_agents_ = len(samples_groups)
+
+        # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
+        # n_samples as representatives
+        agents_representatives_absolute_indexes = [np.arange(len(samples)) for samples in samples_groups]
+        # representatives_local_indexes = representatives_absolute_indexes
+        # each sample starts as its own cluster (and its own parent)
+        # agents_representatives_cluster_assignments = agents_representatives_absolute_indexes.copy()
+        # n_clusters = [0 for _ in agents_representatives_absolute_indexes]  # actually len(representatives_cluster_assignments) but 0 in the beggining to enter the loop
+        common_representatives_cluster_assignments = [1]  # to enter the loop
+        common_n_clusters = 0
+        self.labels_ = None
+        if self.hierarchy_strategy == "parents":
+            agents_parents = agents_representatives_absolute_indexes.copy()
+        elif self.hierarchy_strategy == "labels":
+            agents_parents = None
+        else:
+            raise ValueError("hierarchy_strategy must be 'parents' or 'labels'")
+
+        i = 0
+        # self.n_clusters_iter_ = []
+        # self.labels_iter_ = []
+        # self.representatives_iter_ = []
+        # iterate until every sequence of labels is unique
+        while len(common_representatives_cluster_assignments) != common_n_clusters and i < self.max_iter:
+            if self.verbose:
+                print("Iteration", i)
+
+            # get the union of all representatives absolute indexes
+            union_representatives_absolute_indexes = np.array([], dtype=int)
+            for agent_i in range(len(agents_representatives_absolute_indexes)):
+                agent_i_representatives_absolute_indexes = samples_groups[agent_i][
+                    agents_representatives_absolute_indexes[agent_i]
+                ]
+                union_representatives_absolute_indexes = np.union1d(
+                    union_representatives_absolute_indexes, agent_i_representatives_absolute_indexes
+                )
+
+            # consensus assignment (it is here that we repeatedly apply our base model)
+            common_representatives_cluster_assignments, common_new_n_clusters = self.get_representative_cluster_assignments(
+                X, agents_representatives_absolute_indexes, samples_groups, features_groups, union_representatives_absolute_indexes
+            )
+
+            # using representative_method
+            agents_new_representatives_local_indexes = self.choose_new_representatives(
+                X,
+                agents_representatives_absolute_indexes,
+                common_representatives_cluster_assignments,
+                samples_groups,
+                features_groups,
+                union_representatives_absolute_indexes,
+            )
+
+            if self.hierarchy_strategy == "parents":
+                agents_parents = self.update_parents(
+                    agents_parents,
+                    agents_representatives_absolute_indexes,  # old_representatives_absolute_indexes
+                    common_representatives_cluster_assignments,
+                    agents_new_representatives_local_indexes,
+                    samples_groups,
+                    union_representatives_absolute_indexes,
+                )
+            # elif self.hierarchy_strategy == "labels":
+            #     self.labels_ = update_labels(
+            #         self.labels_,
+            #         representatives_absolute_indexes,
+            #         n_clusters,
+            #         representatives_cluster_assignments,
+            #         self.verbose,
+            #     )
+            else:
+                raise ValueError("hierarchy_strategy must be 'parents'")
+
+            for agent_i in range(len(agents_representatives_absolute_indexes)):
+                agents_representatives_absolute_indexes[agent_i] = agents_representatives_absolute_indexes[agent_i][
+                    agents_new_representatives_local_indexes[agent_i]
+                ]
+            common_n_clusters = common_new_n_clusters
+            # if self.save_path:
+            #     self.representatives_iter_.append(representatives_absolute_indexes)
+
+            i += 1
+
+        self.agents_parents_ = agents_parents
+        self.agents_representatives_absolute_indexes_ = agents_representatives_absolute_indexes
+        if self.automatically_get_labels:
+            self.labels_ = self.get_labels()
+        self.n_iter_ = i
+        return self
