@@ -1,5 +1,5 @@
 from typing import Optional, Literal
-from cohirf.models.cohirf import BaseCoHiRF
+from cohirf.models.cohirf import BaseCoHiRF, choose_new_representatives, compute_similarities
 import numpy as np
 import pandas as pd
 from ml_experiments.utils import update_recursively
@@ -14,7 +14,7 @@ class VeCoHiRF(BaseCoHiRF):
         cohirf_kwargs_shared: Optional[dict] = None,
         priority_to_shared_kwargs: bool = True,
         hierarchy_strategy: Literal["parents", "labels"] = "parents",
-        use_medoid_consensus_per_group: bool = True,
+        use_medoid_rank: bool = True,
         max_iter: int = 100,
         verbose: bool = False,
         n_samples_representative: Optional[int] = None,
@@ -25,13 +25,18 @@ class VeCoHiRF(BaseCoHiRF):
         automatically_get_labels: bool = True,
         n_jobs: int = 1,
         save_path: bool = False,
+        # consensus parameters
+        consensus_strategy: Literal[
+            "factorize", "top-down", "top-down-approx", "bottom-up", "bottom-up-approx"
+        ] = "factorize",
+        consensus_threshold: float = 0.8,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
         self.cohirf_kwargs_shared = cohirf_kwargs_shared if cohirf_kwargs_shared is not None else {}
         self.priority_to_shared_kwargs = priority_to_shared_kwargs
         self.hierarchy_strategy = hierarchy_strategy
-        self.use_medoid_consensus_per_group = use_medoid_consensus_per_group
+        self.use_medoid_rank = use_medoid_rank
         self.max_iter = max_iter
         self.verbose = verbose
         self.transform_once_per_iteration = False
@@ -41,6 +46,10 @@ class VeCoHiRF(BaseCoHiRF):
         self.automatically_get_labels = automatically_get_labels
         self.n_jobs = n_jobs
         self.save_path = save_path
+        self.last_model = None
+        self.last_model_kwargs = {}
+        self.consensus_strategy = consensus_strategy
+        self.consensus_threshold = consensus_threshold
 
     def run_one_repetition(self, X_representative, i_group, child_random_state): # pyright: ignore[reportIncompatibleMethodOverride]
         if self.verbose:
@@ -86,7 +95,7 @@ class VeCoHiRF(BaseCoHiRF):
         new_representative_cluster_assignments,
         new_unique_clusters_labels,
     ):
-        if not self.use_medoid_consensus_per_group:
+        if not self.use_medoid_rank:
             return super().choose_new_representatives(
                 X_representatives,
                 new_representative_cluster_assignments,
@@ -113,7 +122,7 @@ class VeCoHiRF(BaseCoHiRF):
                 new_representatives_local_indexes_ranks = []
                 for features in self.features_groups:
                     X_group = X_cluster[:, features]
-                    cluster_similarities = self.compute_similarities(X_group)
+                    cluster_similarities = compute_similarities(X_group, self.representative_method, self.verbose)
                     cluster_similarities_sum = cluster_similarities.sum(axis=0)
                     rank_of_most_similar_samples = np.argsort(cluster_similarities_sum)[::-1]  # reversed order: most similar first
                     new_representatives_local_indexes_ranks.append(rank_of_most_similar_samples)

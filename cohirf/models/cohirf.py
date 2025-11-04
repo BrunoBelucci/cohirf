@@ -390,7 +390,9 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         last_model: Optional[str | type[BaseEstimator] | Pipeline] = None,
         last_model_kwargs: Optional[dict] = None,
         # consensus parameters
-        consensus_strategy: Literal["factorize", "top-down", "top-down-approx", "bottom-up", "bottom-up-approx"] = "factorize",
+        consensus_strategy: Literal[
+            "factorize", "top-down", "top-down-approx", "bottom-up", "bottom-up-approx"
+        ] = "factorize",
         consensus_threshold: float = 0.8,
         # sampling parameters
         n_features: int | float = 10,  # number of random features that will be sampled
@@ -621,6 +623,22 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
         n_clusters = len(unique)
         return codes, n_clusters
 
+    def choose_new_representatives(
+        self,
+        X_representatives: np.ndarray,
+        new_representative_cluster_assignments: np.ndarray,
+        new_unique_clusters_labels: np.ndarray,
+    ):
+        return choose_new_representatives(
+            X_representatives,
+            new_representative_cluster_assignments,
+            new_unique_clusters_labels,
+            self.representative_method,
+            self.verbose,
+            self.random_state,
+            self.n_samples_representative,
+        )
+
     def fit(self, X: pd.DataFrame | np.ndarray, y=None, sample_weight=None):
         if self.verbose:
             print("Starting fit")
@@ -632,14 +650,14 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
 
         # indexes of the representative samples, start with (n_samples) but will be updated when we have less than
         # n_samples as representatives
-        representatives_absolute_indexes = np.arange(n_samples)
+        self.representatives_absolute_indexes = np.arange(n_samples)
         # representatives_local_indexes = representatives_absolute_indexes
         # each sample starts as its own cluster (and its own parent)
-        representatives_cluster_assignments = representatives_absolute_indexes
+        representatives_cluster_assignments = self.representatives_absolute_indexes
         n_clusters = 0  # actually len(representatives_cluster_assignments) but 0 in the beggining to enter the loop
         self.labels_ = None
         if self.hierarchy_strategy == "parents":
-            parents = representatives_absolute_indexes
+            parents = self.representatives_absolute_indexes
         elif self.hierarchy_strategy == "labels":
             parents = None
         else:
@@ -656,28 +674,24 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
 
             # consensus assignment (it is here that we repeatedly apply our base model)
             representatives_cluster_assignments, new_n_clusters = self.get_representative_cluster_assignments(
-                X, representatives_absolute_indexes
+                X, self.representatives_absolute_indexes
             )
             unique_clusters_labels = np.arange(new_n_clusters)
 
             # using representative_method
-            new_representatives_local_indexes = choose_new_representatives(
-                X[representatives_absolute_indexes],
+            new_representatives_local_indexes = self.choose_new_representatives(
+                X[self.representatives_absolute_indexes],
                 representatives_cluster_assignments,
                 unique_clusters_labels,
-                self.representative_method,
-                self.verbose,
-                self.random_state,
-                self.n_samples_representative,
             )
 
             if self.hierarchy_strategy == "parents":
                 parents = update_parents(
                     parents,
-                    representatives_absolute_indexes,  # old_representatives_absolute_indexes
+                    self.representatives_absolute_indexes,  # old_representatives_absolute_indexes
                     unique_clusters_labels,
                     representatives_cluster_assignments,
-                    representatives_absolute_indexes[
+                    self.representatives_absolute_indexes[
                         new_representatives_local_indexes
                     ],  # new_representatives_absolute_indexes
                     self.verbose
@@ -685,7 +699,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             elif self.hierarchy_strategy == "labels":
                 self.labels_ = update_labels(
                     self.labels_,
-                    representatives_absolute_indexes,
+                    self.representatives_absolute_indexes,
                     n_clusters,
                     representatives_cluster_assignments,
                     self.verbose,
@@ -693,10 +707,10 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             else:
                 raise ValueError("hierarchy_strategy must be 'parents' or 'labels'")
 
-            representatives_absolute_indexes = representatives_absolute_indexes[new_representatives_local_indexes]
+            self.representatives_absolute_indexes = self.representatives_absolute_indexes[new_representatives_local_indexes]
             n_clusters = new_n_clusters
             if self.save_path:
-                self.representatives_iter_.append(representatives_absolute_indexes)
+                self.representatives_iter_.append(self.representatives_absolute_indexes)
 
             i += 1
 
@@ -704,7 +718,7 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             # one last clustering step but with a single run of last_model instead of the consensus with base_model
             if self.verbose:
                 print("Final clustering with last_model")
-            X_representatives = X[representatives_absolute_indexes]
+            X_representatives = X[self.representatives_absolute_indexes]
             last_model = self.get_base_model(X_representatives, self.random_state, self.last_model, self.last_model_kwargs)
             representatives_cluster_assignments = last_model.fit_predict(X_representatives)
             new_n_clusters = len(np.unique(representatives_cluster_assignments))
@@ -717,18 +731,18 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             if self.hierarchy_strategy == "parents":
                 parents = self.update_parents(
                     parents,
-                    representatives_absolute_indexes,  # old_representatives_absolute_indexes
+                    self.representatives_absolute_indexes,  # old_representatives_absolute_indexes
                     unique_clusters_labels,
                     new_n_clusters,
                     representatives_cluster_assignments,
-                    representatives_absolute_indexes[
+                    self.representatives_absolute_indexes[
                         new_representatives_local_indexes
                     ],  # new_representatives_absolute_indexes
                 )
             elif self.hierarchy_strategy == "labels":
                 self.labels_ = update_labels(
                     self.labels_,
-                    representatives_absolute_indexes,
+                    self.representatives_absolute_indexes,
                     n_clusters,
                     representatives_cluster_assignments,
                     self.verbose,
@@ -736,15 +750,16 @@ class BaseCoHiRF(ClusterMixin, BaseEstimator):
             else:
                 raise ValueError("hierarchy_strategy must be 'parents' or 'labels'")
 
-            representatives_absolute_indexes = representatives_absolute_indexes[new_representatives_local_indexes]
+            self.representatives_absolute_indexes = self.representatives_absolute_indexes[new_representatives_local_indexes]
             n_clusters = new_n_clusters
             if self.save_path:
-                self.representatives_iter_.append(representatives_absolute_indexes)
+                self.representatives_iter_.append(self.representatives_absolute_indexes)
 
         self.n_clusters_ = n_clusters
         self.parents_ = parents
-        self.representatives_indexes_ = representatives_absolute_indexes
-        self.cluster_representatives_ = X[representatives_absolute_indexes]
+        self.representatives_indexes_ = self.representatives_absolute_indexes
+        del self.representatives_absolute_indexes
+        self.cluster_representatives_ = X[self.representatives_indexes_]
         if self.automatically_get_labels:
             self.labels_ = self.get_labels()
         self.n_iter_ = i
