@@ -148,6 +148,18 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             all_matrices.append(similarity_matrix)
 
         fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha, verbose=self.verbose)
+        
+        if issparse(fused_matrix):
+            if self.sc_n_components is None:
+                # default behavior is to use number of clusters
+                n_components = self.sc_n_clusters
+            else:
+                n_components = self.sc_n_components
+            
+            if n_components >= fused_matrix.shape[0]:
+                # need to convert to dense, otherwise spectral clustering fails
+                fused_matrix = fused_matrix.toarray()
+        
         spectral_clustering = SpectralClustering(
             n_clusters=self.sc_n_clusters,
             eigen_solver=self.sc_eigen_solver,
