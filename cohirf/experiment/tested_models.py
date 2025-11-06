@@ -113,6 +113,26 @@ models_dict = {
             )
         ],
     ),
+    "CoHiRF-SC-SRGF-1R": (
+        BaseCoHiRF,
+        dict(base_model=SpectralSubspaceRandomization, n_features=1.0, repetitions=1),
+        dict(
+            base_model_kwargs=dict(
+                n_similarities=optuna.distributions.IntDistribution(10, 30),
+                sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
+            ),
+        ),
+        [
+            dict(
+                base_model_kwargs=dict(
+                    n_similarities=20,
+                    sampling_ratio=0.5,
+                    sc_n_clusters=3,
+                ),
+            )
+        ],
+    ),
     "BatchCoHiRF": (
         BatchCoHiRF,
         dict(),
