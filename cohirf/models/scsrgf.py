@@ -78,7 +78,7 @@ def find_dominate_set_sparse(W, K):
         W_numpy = W.toarray()
     else:
         W_numpy = W
-    idx = np.argpartition(-W_numpy, K, axis=1)[:, :K]
+    idx = np.argpartition(-W_numpy, K-1, axis=1)[:, :K]
     new_W = np.zeros_like(W_numpy)
     np.put_along_axis(new_W, idx, np.take_along_axis(W_numpy, idx, axis=1), axis=1)
     new_W = new_W / new_W.sum(axis=1, keepdims=True)
