@@ -7,3 +7,8 @@ kdd-99-full;1,2,3,6,11,20,21
 kdd-99-sub;1,2,3,6,11,20,21
 user-behavior-100k;
 wine;
+spotify;
+cifar-100;
+cifar-100-coarse;
+criteo-test;12
+crop-mapping;
