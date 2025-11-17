@@ -269,6 +269,60 @@ models_dict = {
             )
         ],
     ),
+    "BatchCoHiRF-SC-SRGF-1R": (
+        BatchCoHiRF,
+        dict(
+            cohirf_model=BaseCoHiRF,
+            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, n_features=1.0, repetitions=1),
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                base_model_kwargs=dict(
+                    n_similarities=optuna.distributions.IntDistribution(10, 30),
+                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                    sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
+                ),
+            )
+        ),
+        [
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        n_similarities=20,
+                        sampling_ratio=0.5,
+                        sc_n_clusters=3,
+                    ),
+                )
+            )
+        ],
+    ),
+    "BatchCoHiRF-SC-SRGF-2R": (
+        BatchCoHiRF,
+        dict(
+            cohirf_model=BaseCoHiRF,
+            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, n_features=1.0, repetitions=2),
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                base_model_kwargs=dict(
+                    n_similarities=optuna.distributions.IntDistribution(10, 30),
+                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                    sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
+                ),
+            )
+        ),
+        [
+            dict(
+                cohirf_kwargs=dict(
+                    base_model_kwargs=dict(
+                        n_similarities=20,
+                        sampling_ratio=0.5,
+                        sc_n_clusters=3,
+                    ),
+                )
+            )
+        ],
+    ),
     Clique.__name__: (
         Clique,
         dict(),
@@ -505,3 +559,21 @@ for model_name in batch_cohirf_models:
     search_space = models_dict[model_name][2].copy()
     default_values = models_dict[model_name][3].copy()
     models_dict[model_name + "-stratified"] = (model_cls, model_params, search_space, default_values)
+
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = models_dict[model_name][1].copy()
+    model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1, consensus_strategy="top-down")))
+    search_space = models_dict[model_name][2].copy()
+    default_values = models_dict[model_name][3].copy()
+    models_dict[model_name + "-top-down"] = (model_cls, model_params, search_space, default_values)
+
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = models_dict[model_name][1].copy()
+    model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1, consensus_strategy="top-down-inv")))
+    search_space = models_dict[model_name][2].copy()
+    default_values = models_dict[model_name][3].copy()
+    models_dict[model_name + "-top-down-inv"] = (model_cls, model_params, search_space, default_values)
