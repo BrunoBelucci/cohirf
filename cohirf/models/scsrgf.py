@@ -15,75 +15,106 @@ from sklearn.utils import check_random_state
 
 # and the code from snfpy
 
+# DENSE VERSION
+def snf_dense(W_list, K=20, t=20, alpha=1.0, verbose=False):
+    C = len(W_list)
+    W_array = np.stack([W.toarray() for W in W_list])
+
+    # Normalize and symmetrize matrices
+    if verbose:
+        print("Normalizing and symmetrizing matrices...")
+    W_array = W_array / W_array.sum(axis=2, keepdims=True)
+    W_array = (W_array + W_array.transpose(0, 2, 1)) / 2
+
+    # Find dominate set
+    if verbose:
+        print("Finding dominate sets...")
+    idx = np.argpartition(-W_array, K-1, axis=2)[:, :, :K]
+    new_W_array = np.zeros_like(W_array)
+    np.put_along_axis(new_W_array, idx, np.take_along_axis(W_array, idx, axis=2), axis=2)
+    new_W_array = new_W_array / new_W_array.sum(axis=2, keepdims=True)
+
+    # Fusion process
+    if verbose:
+        print("Performing similarity network fusion...")
+
+    for _ in range(t):
+        Wsum = W_array.sum(axis=0)
+        Wall0_normalized = bo_normalized_dense(
+            new_W_array @ ((Wsum - W_array) / (C - 1)) @ new_W_array.transpose(0, 2, 1), alpha
+        )
+        # we could use einsum for potentially better performance but it gets stuck in some cases (memory?)
+        # Wall0_normalized = bo_normalized_dense(
+        #     np.einsum("cij,cjk,clk->cil", new_W_array, (Wsum - W_array) / (C - 1), new_W_array),
+        #     alpha,
+        # )
+        W_array = Wall0_normalized
+
+    if verbose:
+        print("Finalizing fused matrix...")
+
+    W = W_array.sum(axis=0) / C
+    W = W / W.sum(axis=1, keepdims=True)
+    W = (W + W.T + np.eye(W.shape[0])) / 2
+    return W
+
+
+def bo_normalized_dense(W, alpha=1.0):
+    W = W + alpha * np.eye(W.shape[1])[None, :, :]
+    return (W + W.transpose(0, 2, 1)) / 2
+
+# SPARSE VERSION
 def snf_sparse(W_list, K=20, t=20, alpha=1.0, verbose=False):
     C = len(W_list)
     m, n = W_list[0].shape
-    is_sparse = issparse(W_list[0])
 
     # Normalize and symmetrize matrices
     if verbose:
         print("Normalizing and symmetrizing matrices...")
     for i in range(C):
-        if is_sparse:
-            # keepdims=True) -> already a scipy sparse matrix that keeps dims
-            W_list[i] = W_list[i] / W_list[i].sum(axis=1)
-        else:
-            W_list[i] = W_list[i] / W_list[i].sum(axis=1, keepdims=True)
+        W_list[i] = W_list[i] / W_list[i].sum(axis=1)
         W_list[i] = (W_list[i] + W_list[i].T) / 2
 
     # Find dominate set
     if verbose:
         print("Finding dominate sets...")
     new_W_list = [find_dominate_set_sparse(W, K) for W in W_list]
-    if is_sparse:
-        Wsum = sum(W_list)
-    else:
-        Wsum = np.sum(W_list, axis=0)
+    last_Wsum = sum(W_list)
 
     if verbose:
         print("Performing similarity network fusion...")
     for _ in range(t):
-        Wall0 = [new_W @ ((Wsum - W) / (C - 1)) @ new_W.T for new_W, W in zip(new_W_list, W_list)]
-        W_list = [bo_normalized(W0, alpha, is_sparse) for W0 in Wall0]
-        if is_sparse:
-            Wsum = sum(W_list)
-        else:
-            Wsum = np.sum(W_list, axis=0)
+        Wsum = csr_matrix((n, n))
+        for i in range(len(W_list)):
+            new_W = new_W_list[i]
+            W = W_list[i]
+            Wall0_normalized = bo_normalized_sparse(new_W @ ((last_Wsum - W) / (C - 1)) @ new_W.T, alpha)
+            Wsum = Wsum + Wall0_normalized
+            W_list[i] = Wall0_normalized
+        last_Wsum = Wsum
 
     if verbose:
         print("Finalizing fused matrix...")
     W = Wsum / C
-    if is_sparse:
-        W = W / W.sum(axis=1)
-        W = W + W.T 
-        W.setdiag(W.diagonal() + 1)
-        W = W / 2
-    else:
-        W = W / W.sum(axis=1, keepdims=True)
-        W = (W + W.T + np.eye(n)) / 2
+    W = W / W.sum(axis=1)
+    W = W + W.T 
+    W.setdiag(W.diagonal() + 1)
+    W = W / 2
     return W
 
 
-def bo_normalized(W, alpha=1, is_sparse=False):
-    if is_sparse:
-        W.setdiag(W.diagonal() + alpha)
-    else:
-        W = W + alpha * np.eye(W.shape[0])
+def bo_normalized_sparse(W, alpha=1.0):
+    W.setdiag(W.diagonal() + alpha)
     return (W + W.T) / 2
 
 
 def find_dominate_set_sparse(W, K):
-    is_sparse = issparse(W)
-    if is_sparse:
-        W_numpy = W.toarray()
-    else:
-        W_numpy = W
+    W_numpy = W.toarray()
     idx = np.argpartition(-W_numpy, K-1, axis=1)[:, :K]
     new_W = np.zeros_like(W_numpy)
     np.put_along_axis(new_W, idx, np.take_along_axis(W_numpy, idx, axis=1), axis=1)
     new_W = new_W / new_W.sum(axis=1, keepdims=True)
-    if is_sparse:
-        new_W = csr_matrix(new_W)
+    new_W = csr_matrix(new_W)
     return new_W
 
 
@@ -94,7 +125,7 @@ def knn_sparse(data, K, verbose=False):
     nearest_neighbors.fit(data)
     if verbose:
         print("Computing k-nearest neighbors graph...")
-    graph = nearest_neighbors.kneighbors_graph(data, mode='distance')
+    graph = nearest_neighbors.kneighbors_graph(data, mode='distance')  # always returns a sparse matrix
     if verbose:
         print("Computing sigma...")
     sigma = pairwise_distances(data).mean()
@@ -117,6 +148,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             sc_assign_labels='kmeans',
             verbose=False,
             random_state=None,
+            use_sparse=True,
     ):
         self.knn = knn
         self.n_similarities = n_similarities
@@ -130,6 +162,7 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
         self.sc_assign_labels = sc_assign_labels
         self.verbose = verbose
         self.random_state = random_state
+        self.use_sparse = use_sparse
         self.labels_ = None
 
     def fit(self, X, y=None, sample_weight=None):
@@ -147,7 +180,11 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
             similarity_matrix = knn_sparse(X_i, self.knn, verbose=self.verbose)
             all_matrices.append(similarity_matrix)
 
-        fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha, verbose=self.verbose)
+        if self.use_sparse:
+            # smaller (potentially by not much) memory footprint, slower
+            fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha, verbose=self.verbose)
+        else:
+            fused_matrix = snf_dense(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha, verbose=self.verbose)
         
         if issparse(fused_matrix):
             if self.sc_n_components is None:
