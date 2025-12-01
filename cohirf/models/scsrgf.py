@@ -16,7 +16,7 @@ from sklearn.utils import check_random_state
 # and the code from snfpy
 
 # DENSE VERSION
-def snf_dense(W_list, K=20, t=20, alpha=1.0, verbose=False):
+def snf_dense(W_list, K=20, t=20, check_convergence=False, convergence_type="fro", convergence_tol=1e-6, alpha=1.0, verbose=False):
     C = len(W_list)
     W_array = np.stack([W.toarray() for W in W_list])
 
@@ -48,6 +48,20 @@ def snf_dense(W_list, K=20, t=20, alpha=1.0, verbose=False):
         #     np.einsum("cij,cjk,clk->cil", new_W_array, (Wsum - W_array) / (C - 1), new_W_array),
         #     alpha,
         # )
+        if check_convergence:
+            if convergence_type == "fro":
+                diff = np.linalg.norm(Wall0_normalized - W_array, ord='fro')
+            elif convergence_type == "max":
+                diff = np.max(np.abs(Wall0_normalized - W_array))
+            else:
+                raise ValueError(f"Unknown convergence type: {convergence_type}")
+            if verbose:
+                print(f"Convergence check: diff={diff}")
+            if diff < convergence_tol:
+                if verbose:
+                    print("Convergence reached.")
+                W_array = Wall0_normalized
+                break
         W_array = Wall0_normalized
 
     if verbose:
@@ -64,7 +78,7 @@ def bo_normalized_dense(W, alpha=1.0):
     return (W + W.transpose(0, 2, 1)) / 2
 
 # SPARSE VERSION
-def snf_sparse(W_list, K=20, t=20, alpha=1.0, verbose=False):
+def snf_sparse(W_list, K=20, t=20, check_convergence=False, convergence_type="fro", convergence_tol=1e-6, alpha=1.0, verbose=False):
     C = len(W_list)
     m, n = W_list[0].shape
 
@@ -91,6 +105,19 @@ def snf_sparse(W_list, K=20, t=20, alpha=1.0, verbose=False):
             Wall0_normalized = bo_normalized_sparse(new_W @ ((last_Wsum - W) / (C - 1)) @ new_W.T, alpha)
             Wsum = Wsum + Wall0_normalized
             W_list[i] = Wall0_normalized
+        if check_convergence:
+            if convergence_type == "fro":
+                diff = np.linalg.norm((Wsum - last_Wsum).toarray(), ord='fro')
+            elif convergence_type == "max":
+                diff = np.max(np.abs((Wsum - last_Wsum).toarray()))
+            else:
+                raise ValueError(f"Unknown convergence type: {convergence_type}")
+            if verbose:
+                print(f"Convergence check: diff={diff}")
+            if diff < convergence_tol:
+                if verbose:
+                    print("Convergence reached.")
+                break
         last_Wsum = Wsum
 
     if verbose:
@@ -134,24 +161,33 @@ def knn_sparse(data, K, verbose=False):
 
 
 class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
+
     def __init__(
-            self,
-            knn=5,
-            n_similarities=20,
-            alpha=1.0,
-            sampling_ratio=0.5,
-            sc_n_clusters=8,
-            sc_eigen_solver=None,
-            sc_n_components=None,
-            sc_n_init=10,
-            sc_eigen_tol=0.0,
-            sc_assign_labels='kmeans',
-            verbose=False,
-            random_state=None,
-            use_sparse=True,
+        self,
+        knn=5,
+        n_similarities=20,
+        max_iter_fusion=20,
+        check_fusion_convergence=False,
+        fusion_convergence_type="fro",
+        fusion_convergence_tol=1e-6,
+        alpha=1.0,
+        sampling_ratio=0.5,
+        sc_n_clusters=8,
+        sc_eigen_solver=None,
+        sc_n_components=None,
+        sc_n_init=10,
+        sc_eigen_tol=0.0,
+        sc_assign_labels="kmeans",
+        verbose=False,
+        random_state=None,
+        use_sparse=True,
     ):
         self.knn = knn
         self.n_similarities = n_similarities
+        self.max_iter_fusion = max_iter_fusion
+        self.check_fusion_convergence = check_fusion_convergence
+        self.fusion_convergence_type = fusion_convergence_type
+        self.fusion_convergence_tol = fusion_convergence_tol
         self.alpha = alpha
         self.sampling_ratio = sampling_ratio
         self.sc_n_clusters = sc_n_clusters
@@ -182,21 +218,39 @@ class SpectralSubspaceRandomization(ClusterMixin, BaseEstimator):
 
         if self.use_sparse:
             # smaller (potentially by not much) memory footprint, slower
-            fused_matrix = snf_sparse(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha, verbose=self.verbose)
+            fused_matrix = snf_sparse(
+                all_matrices,
+                K=self.knn,
+                t=self.max_iter_fusion,
+                check_convergence=self.check_fusion_convergence,
+                convergence_type=self.fusion_convergence_type,
+                convergence_tol=self.fusion_convergence_tol,
+                alpha=self.alpha,
+                verbose=self.verbose,
+            )
         else:
-            fused_matrix = snf_dense(all_matrices, K=self.knn, t=self.n_similarities, alpha=self.alpha, verbose=self.verbose)
-        
+            fused_matrix = snf_dense(
+                all_matrices,
+                K=self.knn,
+                t=self.max_iter_fusion,
+                check_convergence=self.check_fusion_convergence,
+                convergence_type=self.fusion_convergence_type,
+                convergence_tol=self.fusion_convergence_tol,
+                alpha=self.alpha,
+                verbose=self.verbose,
+            )
+
         if issparse(fused_matrix):
             if self.sc_n_components is None:
                 # default behavior is to use number of clusters
                 n_components = self.sc_n_clusters
             else:
                 n_components = self.sc_n_components
-            
+
             if n_components >= fused_matrix.shape[0]:
                 # need to convert to dense, otherwise spectral clustering fails
                 fused_matrix = fused_matrix.toarray()
-        
+
         spectral_clustering = SpectralClustering(
             n_clusters=self.sc_n_clusters,
             eigen_solver=self.sc_eigen_solver,
