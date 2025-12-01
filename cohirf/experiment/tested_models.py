@@ -19,6 +19,7 @@ from cohirf.models.pseudo_kernel import PseudoKernelClustering
 from sklearn.kernel_approximation import RBFSampler
 import optuna
 from ml_experiments.utils import update_recursively
+from copy import deepcopy
 
 
 models_dict = {
@@ -498,82 +499,82 @@ models_dict = {
 
 model_name = "BatchCoHiRF-SC-SRGF"
 model_cls = models_dict[model_name][0]
-model_params = models_dict[model_name][1].copy()
-search_space = models_dict[model_name][2].copy()
+model_params = deepcopy(models_dict[model_name][1])
+search_space = deepcopy(models_dict[model_name][2])
 search_space = update_recursively(
     search_space,
     dict(cohirf_kwargs=dict(base_model_kwargs=dict(sc_n_clusters=optuna.distributions.IntDistribution(2, 30)))),
 )
-default_values = models_dict[model_name][3].copy()
+default_values = deepcopy(models_dict[model_name][3])
 models_dict[model_name + "-2"] = (model_cls, model_params, search_space, default_values)
 
 model_name = CoHiRF.__name__
 model_cls = models_dict[model_name][0]
-model_params = models_dict[model_name][1].copy()
+model_params = deepcopy(models_dict[model_name][1])
 model_params = update_recursively(model_params, dict(n_samples_representative=1000))
-search_space = models_dict[model_name][2].copy()
-default_values = models_dict[model_name][3].copy()
+search_space = deepcopy(models_dict[model_name][2])
+default_values = deepcopy(models_dict[model_name][3])
 models_dict[model_name + "-1000"] = (model_cls, model_params, search_space, default_values)
 
 cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("CoHiRF")]
 for model_name in cohirf_models:
     model_cls = models_dict[model_name][0]
-    model_params = models_dict[model_name][1].copy()
+    model_params = deepcopy(models_dict[model_name][1])
     model_params = update_recursively(model_params, dict(consensus_strategy="top-down"))
-    search_space = models_dict[model_name][2].copy()
-    default_values = models_dict[model_name][3].copy()
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-top-down"] = (model_cls, model_params, search_space, default_values)
 
 cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("CoHiRF") and model_name.find("-top-down") == -1]
 for model_name in cohirf_models:
     model_cls = models_dict[model_name][0]
-    model_params = models_dict[model_name][1].copy()
+    model_params = deepcopy(models_dict[model_name][1])
     model_params = update_recursively(model_params, dict(consensus_strategy="top-down-inv"))
-    search_space = models_dict[model_name][2].copy()
-    default_values = models_dict[model_name][3].copy()
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-top-down-inv"] = (model_cls, model_params, search_space, default_values)
 
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]
-    model_params = models_dict[model_name][1].copy()
+    model_params = deepcopy(models_dict[model_name][1])
     model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1)))
-    search_space = models_dict[model_name][2].copy()
-    default_values = models_dict[model_name][3].copy()
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-1iter"] = (model_cls, model_params, search_space, default_values)
 
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]
-    model_params = models_dict[model_name][1].copy()
+    model_params = deepcopy(models_dict[model_name][1])
     model_params = update_recursively(model_params, dict(batch_sample_strategy="random"))
-    search_space = models_dict[model_name][2].copy()
-    default_values = models_dict[model_name][3].copy()
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-random"] = (model_cls, model_params, search_space, default_values)
 
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]
-    model_params = models_dict[model_name][1].copy()
+    model_params = deepcopy(models_dict[model_name][1])
     model_params = update_recursively(model_params, dict(batch_sample_strategy="stratified"))
-    search_space = models_dict[model_name][2].copy()
-    default_values = models_dict[model_name][3].copy()
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-stratified"] = (model_cls, model_params, search_space, default_values)
 
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]
-    model_params = models_dict[model_name][1].copy()
+    model_params = deepcopy(models_dict[model_name][1])
     model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1, consensus_strategy="top-down")))
-    search_space = models_dict[model_name][2].copy()
-    default_values = models_dict[model_name][3].copy()
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-top-down"] = (model_cls, model_params, search_space, default_values)
 
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF") and model_name.find("-top-down") == -1]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]
-    model_params = models_dict[model_name][1].copy()
+    model_params = deepcopy(models_dict[model_name][1])
     model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1, consensus_strategy="top-down-inv")))
-    search_space = models_dict[model_name][2].copy()
-    default_values = models_dict[model_name][3].copy()
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-top-down-inv"] = (model_cls, model_params, search_space, default_values)
