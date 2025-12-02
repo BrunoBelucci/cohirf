@@ -25,6 +25,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         automatically_get_labels: bool = True,
         random_state: Optional[int] = None,
         save_path: bool = False,
+        stop_at_last_epoch: bool = True,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
@@ -38,6 +39,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         self.automatically_get_labels = automatically_get_labels
         self._random_state = random_state
         self.save_path = save_path
+        self.stop_at_last_epoch = stop_at_last_epoch
 
     @property
     def random_state(self):
@@ -265,12 +267,11 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         representatives_local_indexes = representatives_absolute_indexes
         X_representatives = X
         i = 0
-        last_epoch = False
         n_clusters = 0
         len_representatives_cluster_assignments = 1
         self.representatives_iter_ = []
         # stop when we have run with n_batches == 1 or when we have not changed the representatives or when we reach max_epochs
-        while not last_epoch and i < self.max_epochs and len_representatives_cluster_assignments != n_clusters:
+        while i < self.max_epochs and len_representatives_cluster_assignments != n_clusters:
             if self.verbose > 0:
                 print(f"Starting epoch {i}")
 
@@ -307,6 +308,10 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             n_clusters = new_n_clusters
 
             i += 1
+            if last_epoch and self.stop_at_last_epoch:
+                if self.verbose > 0:
+                    print("Last epoch reached, stopping.")
+                break
 
         self.n_clusters_ = n_clusters
         self.parents_ = parents
