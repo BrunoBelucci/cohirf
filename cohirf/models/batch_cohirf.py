@@ -72,6 +72,13 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
         # update random_state if needed
         if "random_state" not in kwargs:
             kwargs["random_state"] = child_random_state
+
+        # try to distribute n_jobs if possible
+        if "n_jobs" not in kwargs:
+            n_jobs = self.n_jobs // len(self._batches_i)
+            n_jobs = max(1, n_jobs)
+            kwargs["n_jobs"] = n_jobs
+            
         cohirf_model = self.cohirf_model(**kwargs)
         cohirf_model.fit(X_batch)
 
@@ -104,7 +111,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             # last epoch (every sample fits in one batch, we run one batch with all the final samples and stop)
             n_batches = 1
             self._batches_indexes = [np.arange(n_samples)]
-            batches_i = np.array([0])
+            self._batches_i = np.array([0])
             last_epoch = True
         else:
             # we will leave one batch out for the last epoch
@@ -120,14 +127,14 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             else:
                 raise ValueError(f"Unknown batch_sample_strategy: {self.batch_sample_strategy}")
 
-            batches_i = np.arange(n_batches)
+            self._batches_i = np.arange(n_batches)
             leave_out_i = self.random_state.integers(0, n_batches)
-            batches_i = np.delete(batches_i, leave_out_i)
+            self._batches_i = np.delete(self._batches_i, leave_out_i)
             last_epoch = False
 
         parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)
-        child_random_states = self.random_state.spawn(len(batches_i) + 1)
-        results = parallel(delayed(self.run_one_batch)(X_representatives, i, child_random_states[i]) for i in batches_i)
+        child_random_states = self.random_state.spawn(len(self._batches_i) + 1)
+        results = parallel(delayed(self.run_one_batch)(X_representatives, i, child_random_states[i]) for i in self._batches_i)
         all_parents, all_labels, all_representatives_indexes, all_n_clusters = zip(*results)
         all_parents = list(all_parents)
         all_labels = list(all_labels)
