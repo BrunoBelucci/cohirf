@@ -3,6 +3,8 @@ from cohirf.models.cohirf import BaseCoHiRF
 import numpy as np
 import pandas as pd
 from ml_experiments.utils import update_recursively
+from sklearn.base import BaseEstimator
+from sklearn.pipeline import Pipeline
 
 
 class VeCoHiRF(BaseCoHiRF):
@@ -25,6 +27,14 @@ class VeCoHiRF(BaseCoHiRF):
         automatically_get_labels: bool = True,
         n_jobs: int = 1,
         save_path: bool = False,
+        # consensus parameters
+        consensus_strategy: Literal[
+            "factorize", "top-down", "top-down-approx", "bottom-up", "bottom-up-approx"
+        ] = "factorize",
+        consensus_threshold: float = 0.8,
+        # last model parameters
+        last_model: Optional[str | type[BaseEstimator] | Pipeline] = None,
+        last_model_kwargs: Optional[dict] = None,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
@@ -41,6 +51,10 @@ class VeCoHiRF(BaseCoHiRF):
         self.automatically_get_labels = automatically_get_labels
         self.n_jobs = n_jobs
         self.save_path = save_path
+        self.consensus_strategy = consensus_strategy
+        self.consensus_threshold = consensus_threshold
+        self.last_model = last_model
+        self.last_model_kwargs = last_model_kwargs if last_model_kwargs is not None else {}
 
     def run_one_repetition(self, X_representative, i_group, child_random_state): # pyright: ignore[reportIncompatibleMethodOverride]
         if self.verbose:
