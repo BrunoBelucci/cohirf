@@ -78,7 +78,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             n_jobs = self.n_jobs // len(self._batches_i)
             n_jobs = max(1, n_jobs)
             kwargs["n_jobs"] = n_jobs
-            
+
         cohirf_model = self.cohirf_model(**kwargs)
         cohirf_model.fit(X_batch)
 
@@ -132,7 +132,7 @@ class BatchCoHiRF(ClusterMixin, BaseEstimator):
             self._batches_i = np.delete(self._batches_i, leave_out_i)
             last_epoch = False
 
-        parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose)
+        parallel = Parallel(n_jobs=self.n_jobs, return_as="list", verbose=self.verbose, backend="loky")
         child_random_states = self.random_state.spawn(len(self._batches_i) + 1)
         results = parallel(delayed(self.run_one_batch)(X_representatives, i, child_random_states[i]) for i in self._batches_i)
         all_parents, all_labels, all_representatives_indexes, all_n_clusters = zip(*results)
