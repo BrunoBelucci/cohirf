@@ -860,8 +860,17 @@ class CoHiRF(BaseCoHiRF):
     def get_base_model(self, X, child_random_state, base_model, base_model_kwargs):
         random_seed = child_random_state.integers(0, 1e6)
         if base_model == "kmeans":
+            n_clusters = self.kmeans_n_clusters
+            if n_clusters > X.shape[0]:
+                if self.verbose:
+                    print(
+                        f"Warning: base_model n_clusters ({n_clusters}) is larger than the number of samples"
+                        f" ({X.shape[0]}). Setting n_clusters to {X.shape[0]}."
+                    )
+                n_clusters=X.shape[0]
+
             return KMeans(
-                n_clusters=self.kmeans_n_clusters,
+                n_clusters=n_clusters,
                 init=self.kmeans_init,  # type: ignore
                 n_init=self.kmeans_n_init,  # type: ignore
                 max_iter=self.kmeans_max_iter,
