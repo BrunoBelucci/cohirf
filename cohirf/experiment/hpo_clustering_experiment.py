@@ -11,7 +11,7 @@ import mlflow
 class HPOClusteringExperiment(HPOExperiment):
     """
     Abstract experiment class for hyperparameter optimization (HPO) of clustering algorithms.
-    
+
     This class extends the base HPO framework to support clustering-specific experiments.
     It manages the hyperparameter search process using Optuna, handles random seed generation
     for reproducible trials, and integrates with MLflow for experiment tracking. Subclasses
@@ -20,17 +20,11 @@ class HPOClusteringExperiment(HPOExperiment):
     """
 
     def __init__(
-            self,
-            *args,
-            search_space: Optional[dict] = None,
-            default_values: Optional[list] = None,
-            **kwargs,
-    ):
-            self,
-            *args,
-            search_space: Optional[dict] = None,
-            default_values: Optional[list] = None,
-            **kwargs,
+        self,
+        *args,
+        search_space: Optional[dict] = None,
+        default_values: Optional[list] = None,
+        **kwargs,
     ):
         """
         Initialize the HPOClusteringExperiment.
@@ -55,20 +49,14 @@ class HPOClusteringExperiment(HPOExperiment):
     def _load_simple_experiment(
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
     ):
-        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
-    ):
         raise NotImplementedError
 
     def _before_fit_model(
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
     ):
-        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
-    ):
         hpo_seed = unique_params["hpo_seed"]
         ret = super()._before_fit_model(combination, unique_params, extra_params, mlflow_run_id, **kwargs)
         simple_experiment = self._load_simple_experiment(
-            combination, unique_params, extra_params, mlflow_run_id, **kwargs
-        )
             combination, unique_params, extra_params, mlflow_run_id, **kwargs
         )
         random_generator = np.random.default_rng(hpo_seed)
@@ -79,17 +67,7 @@ class HPOClusteringExperiment(HPOExperiment):
     def get_trial_fn(
         self,
         study: Study,
-        search_space: dict, 
-        combination: dict,
-        unique_params: dict,
-        extra_params: dict,
-        mlflow_run_id: Optional[str] = None,
-        child_runs_ids: Optional[list] = None,
-        **kwargs,
-    ) -> dict:
-        self,
-        study: Study,
-        search_space: dict, 
+        search_space: dict,
         combination: dict,
         unique_params: dict,
         extra_params: dict,
@@ -109,14 +87,6 @@ class HPOClusteringExperiment(HPOExperiment):
         return dict(trial=trial, trial_key=trial_key, child_run_id=child_run_id, seed_model=seed_model)
 
     def training_fn(
-        self,
-        trial_dict: dict,
-        combination: dict,
-        unique_params: dict,
-        extra_params: dict,
-        mlflow_run_id: str | None = None,
-        **kwargs,
-    ) -> dict:
         self,
         trial_dict: dict,
         combination: dict,
@@ -151,20 +121,8 @@ class HPOClusteringExperiment(HPOExperiment):
                 mlflow_run_id=child_run_id,
                 return_results=True,
             )
-                combination=combination,
-                unique_params=unique_params,
-                extra_params=extra_params,
-                mlflow_run_id=child_run_id,
-                return_results=True,
-            )
         else:
             results = simple_experiment._train_model(
-                combination=combination,
-                unique_params=unique_params,
-                extra_params=extra_params,
-                mlflow_run_id=child_run_id,
-                return_results=True,
-            )
                 combination=combination,
                 unique_params=unique_params,
                 extra_params=extra_params,
@@ -174,9 +132,13 @@ class HPOClusteringExperiment(HPOExperiment):
 
         if not isinstance(results, dict):
             results = dict()
-        
-        if "evaluate_model_return" not in results:  # maybe we already have the run this run and we are getting the stored run result
-            keep_results = {metric[len("metrics."):]: value for metric, value in results.items() if metric.startswith("metrics.")}
+
+        if (
+            "evaluate_model_return" not in results
+        ):  # maybe we already have the run this run and we are getting the stored run result
+            keep_results = {
+                metric[len("metrics.") :]: value for metric, value in results.items() if metric.startswith("metrics.")
+            }
         else:
             keep_results = results.get("evaluate_model_return", {})
         if "fit_model_return" not in results:
@@ -196,8 +158,6 @@ class HPOClusteringExperiment(HPOExperiment):
     def get_search_space(
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
     ) -> dict:
-        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
-    ) -> dict:
         model = combination["model"]
         if isinstance(model, str):
             model_class, model_default_params, search_space, default_values = self.models_dict[model]
@@ -208,8 +168,6 @@ class HPOClusteringExperiment(HPOExperiment):
         return search_space
 
     def get_default_values(
-        self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
-    ) -> list:
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
     ) -> list:
         model = combination["model"]
