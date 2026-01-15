@@ -10,7 +10,7 @@ We recommend using a virtual environment created with conda from the project pac
 ```bash
 conda create -n cohirf --file package-list.txt -c conda-forge
 ```
-
+conda create -n cocohirf --file package-list.txt -c conda-forge
 Then, activate the environment:
 
 ```bash
