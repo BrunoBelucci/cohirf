@@ -71,15 +71,6 @@ class CustomClusteringExperiment(ClusteringExperiment):
         # try to infer categorical features from data
         cat_features_names = X.select_dtypes(include=['object', 'category']).columns.tolist()
         cont_features_names = X.select_dtypes(include=['number', 'bool']).columns.tolist()
-        agent_i = unique_params.get('agent_i', None)
-        
-        # if multiple y, we suppose y[0] is the global label and y[1:], if any, are local labels
-        if isinstance(y, (tuple, list)):
-            if agent_i is None:
-                y = y[0]
-            else:
-                y = y[agent_i + 1]
-        n_classes = len(y.unique())
         
         # we will preprocess the data always in the same way
         X, y = preprocess(X, y, cat_features_names, cont_features_names, standardize, seed_dataset_order)
