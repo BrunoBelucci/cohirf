@@ -12,3 +12,4 @@ cifar-100;
 cifar-100-coarse;
 criteo-test;12
 crop-mapping;
+synthetic_3d;
