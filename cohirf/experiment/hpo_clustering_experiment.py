@@ -88,20 +88,20 @@ class HPOClusteringExperiment(HPOExperiment):
 
     def training_fn(
         self,
-        trial_dict: dict,
+        trial: dict,
         combination: dict,
         unique_params: dict,
         extra_params: dict,
         mlflow_run_id: str | None = None,
         **kwargs,
     ) -> dict:
-        trial: Trial = trial_dict["trial"]
-        child_run_id = trial_dict["child_run_id"]
-        seed_model = trial_dict["seed_model"]
+        trial_opt: Trial = trial["trial"]
+        child_run_id = trial["child_run_id"]
+        seed_model = trial["seed_model"]
         simple_experiment: BaseExperiment = kwargs["before_fit_model_return"]["simple_experiment"]
 
         # update the model parameters in unique_params
-        trial_params = trial.params.copy()
+        trial_params = trial_opt.params.copy()
         unique_params = unique_params.copy()
         model_params = unique_params["model_params"]
         model_params = flatten_any(model_params)
@@ -152,7 +152,7 @@ class HPOClusteringExperiment(HPOExperiment):
             log_metrics = keep_results.copy()
             log_metrics.pop("elapsed_time", None)
             log_metrics.pop("max_memory_used", None)
-            mlflow.log_metrics(log_metrics, run_id=mlflow_run_id, step=trial.number)
+            mlflow.log_metrics(log_metrics, run_id=mlflow_run_id, step=trial_opt.number)
         return keep_results
 
     def get_search_space(
