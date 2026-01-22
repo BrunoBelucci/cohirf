@@ -39,6 +39,7 @@ def preprocess(
     seed_dataset_order=None,
     seed_random_noise=None,
     random_noise_std=None,
+    pct_random_noise=None,
 ):
     y = y[~X.duplicated()].copy()
     X = X[~X.duplicated()].copy()
@@ -84,7 +85,14 @@ def preprocess(
             raise ValueError('If random_noise_std is specified, seed_random_noise must be specified too')
         # we add a small random (gaussian) noise to the features
         generator = np.random.default_rng(seed_random_noise)
-        noise = generator.normal(0, random_noise_std, size=X.shape)
+        if pct_random_noise is not None:
+            n_samples = X.shape[0]
+            n_noisy_samples = int(n_samples * pct_random_noise)
+            noisy_indices = generator.choice(n_samples, size=n_noisy_samples, replace=False)
+            noise = generator.normal(0, random_noise_std, size=(n_noisy_samples, X.shape[1]))
+            X.iloc[noisy_indices] += noise
+        else:
+            noise = generator.normal(0, random_noise_std, size=X.shape)
         X += noise
     return X, y
 
@@ -112,6 +120,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             standardize: bool = False,
             random_noise_std: Optional[float] = None,
             seed_random_noise: Optional[int] = None,
+            pct_random_noise: Optional[float] = None,
             **kwargs
     ):
         """
@@ -138,10 +147,12 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             standardize (bool, optional): Whether to standardize features (zero mean, unit variance)
                 before clustering. Recommended for algorithms sensitive to feature scales.
                 Defaults to False.
-			random_noise_std (Optional[float], optional): Standard deviation of Gaussian noise
-				added to features. If None, no noise is added. Defaults to None.
+            random_noise_std (Optional[float], optional): Standard deviation of Gaussian noise
+                added to features. If None, no noise is added. Defaults to None.
             seed_random_noise (Optional[int], optional): Seed for generating random noise
-				if random_noise_std is specified. Ensures reproducibility of noise addition. Defaults to None.
+                if random_noise_std is specified. Ensures reproducibility of noise addition. Defaults to None.
+            pct_random_noise (Optional[float], optional): Percentage of samples to which noise is added.
+                If None, noise is added to all samples. Defaults to None.
             **kwargs: Additional keyword arguments passed to parent class.
         """
         super().__init__(**kwargs)
@@ -154,6 +165,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         self.standardize = standardize
         self.random_noise_std = random_noise_std
         self.seed_random_noise = seed_random_noise
+        self.pct_random_noise = pct_random_noise
 
     @property
     def models_dict(self):
@@ -172,6 +184,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         self.parser.add_argument('--standardize', action='store_true', default=self.standardize)
         self.parser.add_argument('--random_noise_std', type=float, default=self.random_noise_std)
         self.parser.add_argument('--seed_random_noise', type=int, default=self.seed_random_noise)
+        self.parser.add_argument('--pct_random_noise', type=float, default=self.pct_random_noise)
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -184,6 +197,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         self.standardize = args.standardize
         self.random_noise_std = args.random_noise_std
         self.seed_random_noise = args.seed_random_noise
+        self.pct_random_noise = args.pct_random_noise
         return args
 
     def _get_combinations_names(self) -> list[str]:
@@ -197,6 +211,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             'task_sample',
             'random_noise_std',
             'seed_random_noise',
+            'pct_random_noise',
         ])
         return combination_names
 
@@ -217,6 +232,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
         standardize = unique_params['standardize']
         random_noise_std = combination["random_noise_std"]
         seed_random_noise = combination["seed_random_noise"]
+        pct_random_noise = combination["pct_random_noise"]
         if task_id is not None:
             if dataset_id is not None:
                 raise ValueError('You cannot specify both dataset_id and task_id')
@@ -257,6 +273,7 @@ class OpenmlClusteringExperiment(ClusteringExperiment):
             seed_dataset_order,
             seed_random_noise,
             random_noise_std,
+            pct_random_noise
         )
         # log to mlflow to facilitate analysis
         if mlflow_run_id is not None:
