@@ -93,7 +93,7 @@ def preprocess(
             X.iloc[noisy_indices] += noise
         else:
             noise = generator.normal(0, random_noise_std, size=X.shape)
-        X += noise
+            X += noise
     return X, y
 
 
