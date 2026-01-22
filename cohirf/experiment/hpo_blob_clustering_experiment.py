@@ -5,9 +5,7 @@ from cohirf.experiment.blob_clustering_experiment import BlobClusteringExperimen
 
 
 class HPOBlobClusteringExperiment(HPOExperiment, BlobClusteringExperiment):
-    def get_hyperband_max_resources(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
-        raise NotImplementedError('Hyperband is not available for this experiment')
-
+    
     def _load_single_experiment(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
         blob_clustering_experiment = BlobClusteringExperiment(
             n_samples=self.n_samples, n_features_dataset=self.n_features_dataset, centers=self.centers, cluster_std=self.cluster_std,

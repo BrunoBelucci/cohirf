@@ -5,9 +5,7 @@ from cohirf.experiment.custom_clustering_experiment import CustomClusteringExper
 
 
 class HPOCustomClusteringExperiment(HPOClusteringExperiment, CustomClusteringExperiment):
-    def get_hyperband_max_resources(self, combination: dict, unique_params: dict, extra_params: dict, **kwargs):
-        raise NotImplementedError('Hyperband is not available for this experiment')
-
+    
     def _load_simple_experiment(
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: str | None = None, **kwargs
     ):

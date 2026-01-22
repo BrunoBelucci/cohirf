@@ -3,7 +3,7 @@ import mlflow
 import pandas as pd
 from cohirf.experiment.open_ml_clustering_experiment import preprocess, models_dict
 from cohirf.experiment.clustering_experiment import ClusteringExperiment
-from pathlib import Path
+import numpy as np
 
 
 class CustomClusteringExperiment(ClusteringExperiment):
@@ -47,19 +47,6 @@ class CustomClusteringExperiment(ClusteringExperiment):
     def models_dict(self):
         return models_dict.copy()
 
-    # def _add_arguments_to_parser(self):
-    #     super()._add_arguments_to_parser()
-    #     self.parser.add_argument("--dataset_name", type=str, nargs="*")
-    #     self.parser.add_argument('--standardize', action='store_true')
-    #     self.parser.add_argument('--seed_dataset_order', type=int, nargs="*")
-
-    # def _unpack_parser(self):
-    #     args = super()._unpack_parser()
-    #     self.dataset_name = args.dataset_name
-    #     self.standardize = args.standardize
-    #     self.seed_dataset_order = args.seed_dataset_order
-    #     return args
-
     def _load_data(
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
     ):
@@ -74,6 +61,7 @@ class CustomClusteringExperiment(ClusteringExperiment):
         
         # we will preprocess the data always in the same way
         X, y = preprocess(X, y, cat_features_names, cont_features_names, standardize, seed_dataset_order)
+        n_classes = np.unique(y).shape[0]
         # log to mlflow to facilitate analysis
         mlflow_run_id = extra_params.get('mlflow_run_id', None)
         if mlflow_run_id is not None:
@@ -110,8 +98,3 @@ class CustomClusteringExperiment(ClusteringExperiment):
         extra_params["X"] = self.X
         extra_params["y"] = self.y
         return extra_params
-
-
-# if __name__ == '__main__':
-#     experiment = CustomClusteringExperiment()
-#     experiment.run_from_cli()
