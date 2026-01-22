@@ -5,6 +5,7 @@ from shutil import rmtree
 from functools import partial
 import mlflow
 import numpy as np
+import pandas as pd
 from sklearn.metrics import (rand_score, adjusted_rand_score, mutual_info_score, adjusted_mutual_info_score,
                              normalized_mutual_info_score, homogeneity_completeness_v_measure, silhouette_score,
                              calinski_harabasz_score, davies_bouldin_score)
@@ -120,6 +121,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         calculate_metrics_even_if_too_many_clusters: bool = False,
         # if we set this, we will automatically set the number of threads to accomodate the number of jobs
         max_threads: Optional[int] = None,
+        save_labels: bool = False,
         **kwargs,
     ):
         """
@@ -157,6 +159,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
                 Defaults to None (no limit).
             calculate_metrics_even_if_too_many_clusters (bool, optional): Whether to calculate
                 metrics even if the number of clusters is too high. Defaults to False.
+            save_labels (bool, optional): Whether to save the predicted labels after clustering.
+				Defaults to False.
             **kwargs: Additional keyword arguments passed to parent class.
         """
         super().__init__(*args, **kwargs)
@@ -170,6 +174,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.calculate_full_silhouette = calculate_full_silhouette
         self.max_threads = max_threads
         self.calculate_metrics_even_if_too_many_clusters = calculate_metrics_even_if_too_many_clusters
+        self.save_labels = save_labels
 
     def _add_arguments_to_parser(self):
         super()._add_arguments_to_parser()
@@ -189,6 +194,8 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.parser.add_argument('--max_threads', type=int, default=self.max_threads, help='Maximum number of threads to use across all jobs.')
         self.parser.add_argument('--calculate_metrics_even_if_too_many_clusters', action='store_true', default=self.calculate_metrics_even_if_too_many_clusters,
                                 help='Calculate metrics even if the number of clusters is too high.')
+        self.parser.add_argument('--save_labels', action='store_true', default=self.save_labels,
+								help='Save predicted labels after clustering.')
 
     def _unpack_parser(self):
         args = super()._unpack_parser()
@@ -202,6 +209,7 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self.calculate_full_silhouette = args.calculate_full_silhouette
         self.max_threads = args.max_threads
         self.calculate_metrics_even_if_too_many_clusters = args.calculate_metrics_even_if_too_many_clusters
+        self.save_labels = args.save_labels
         return args
 
     def _get_combinations_names(self) -> list[str]:
@@ -221,7 +229,9 @@ class ClusteringExperiment(BaseExperiment, ABC):
         return unique_params
 
     def _get_extra_params(self):
-        return super()._get_extra_params()
+        extra_params = super()._get_extra_params()
+        extra_params["save_labels"] = self.save_labels
+        return extra_params
 
     @property
     def models_dict(self):
@@ -297,12 +307,20 @@ class ClusteringExperiment(BaseExperiment, ABC):
         self, combination: dict, unique_params: dict, extra_params: dict, mlflow_run_id: Optional[str] = None, **kwargs
     ):
         model = kwargs['load_model_return']['model']
+        save_labels = extra_params["save_labels"]
         X = kwargs['load_data_return']['X']
         if not isinstance(model, BatchCoHiRF):
             y_pred = model.fit_predict(X)
         else:
             y = kwargs['load_data_return'].get('y', None)
             y_pred = model.fit_predict(X, y)
+        if save_labels:
+            save_dir = kwargs.get('save_dir', None)
+            if save_dir is None:
+                raise ValueError("save_dir is None, please specify a valid directory to save labels.")
+            # save labels in a csv file
+            df = pd.DataFrame({'labels': y_pred})
+            df.to_csv(save_dir / f"predicted_labels.csv", index=False)
         return {'y_pred': y_pred}
 
     @profile_time(enable_based_on_attribute="profile_time")
