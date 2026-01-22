@@ -35,6 +35,9 @@ class VeCoHiRF(BaseCoHiRF):
         # last model parameters
         last_model: Optional[str | type[BaseEstimator] | Pipeline] = None,
         last_model_kwargs: Optional[dict] = None,
+		# simulate attack on rank
+		attack_on_rank: Literal["random", "inverse"] | None = None,
+        n_attack_on_rank_agents: int = 0,
     ):
         self.cohirf_model = cohirf_model
         self.cohirf_kwargs = cohirf_kwargs if cohirf_kwargs is not None else {}
@@ -55,6 +58,8 @@ class VeCoHiRF(BaseCoHiRF):
         self.consensus_threshold = consensus_threshold
         self.last_model = last_model
         self.last_model_kwargs = last_model_kwargs if last_model_kwargs is not None else {}
+        self.attack_on_rank = attack_on_rank
+        self.n_attack_on_rank_agents = n_attack_on_rank_agents
 
     def run_one_repetition(self, X_representative, i_group, child_random_state): # pyright: ignore[reportIncompatibleMethodOverride]
         if self.verbose:
@@ -125,11 +130,15 @@ class VeCoHiRF(BaseCoHiRF):
                     X_cluster_indexes = X_cluster_indexes[sampled_indexes]
 
                 new_representatives_local_indexes_ranks = []
-                for features in self.features_groups:
+                for i, features in enumerate(self.features_groups):
                     X_group = X_cluster[:, features]
                     cluster_similarities = compute_similarities(X_group, self.representative_method, self.verbose)
                     cluster_similarities_sum = cluster_similarities.sum(axis=0)
                     rank_of_most_similar_samples = np.argsort(cluster_similarities_sum)[::-1]  # reversed order: most similar first
+                    if self.attack_on_rank == "random" and self.n_attack_on_rank_agents <= (i + 1):
+                        self.random_state.shuffle(rank_of_most_similar_samples)
+                    elif self.attack_on_rank == "inverse" and self.n_attack_on_rank_agents <= (i + 1):
+                        rank_of_most_similar_samples = rank_of_most_similar_samples[::-1]
                     new_representatives_local_indexes_ranks.append(rank_of_most_similar_samples)
 
                 # now we have a list of array of ranks, one per group
