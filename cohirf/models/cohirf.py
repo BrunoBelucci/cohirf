@@ -8,6 +8,7 @@ from sklearn.metrics.pairwise import (
     laplacian_kernel,
     euclidean_distances,
     manhattan_distances,
+    cosine_similarity,
 )
 from sklearn.decomposition import PCA
 from joblib import Parallel, delayed
@@ -83,10 +84,11 @@ def compute_similarities(X_cluster: np.ndarray, representative_method: str, verb
         print("Computing similarities with method", representative_method)
 
     if representative_method == "closest_overall":
-        # calculate the cosine similarities (without normalization) between all samples in the cluster and
+        # calculate the cosine similarities between all samples in the cluster and
         # pick the one with the largest sum
         # this is the most computationally expensive method (O(n^2))
-        cluster_similarities = X_cluster @ X_cluster.T
+        # cluster_similarities = X_cluster @ X_cluster.T -> this only works if X is normalized, which is generally the case
+        cluster_similarities = cosine_similarity(X_cluster)  # but this ensures that it works in all cases
 
     elif representative_method == "closest_to_centroid":
         # calculate the centroid of the cluster and pick the sample most similar to it
