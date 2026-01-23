@@ -94,7 +94,8 @@ def compute_similarities(X_cluster: np.ndarray, representative_method: str, verb
         # calculate the centroid of the cluster and pick the sample most similar to it
         # this is the second most computationally expensive method (O(n))
         centroid = X_cluster.mean(axis=0)
-        cluster_similarities = X_cluster @ centroid
+        # cluster_similarities = X_cluster @ centroid
+        cluster_similarities = cosine_similarity(X_cluster, centroid.reshape(1, -1))
 
     # elif self.representative_method == 'centroid':
     #     # calculate the centroid of the cluster and use it as the representative sample
