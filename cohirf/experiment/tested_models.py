@@ -114,46 +114,6 @@ models_dict = {
             )
         ],
     ),
-    "CoHiRF-SC-SRGF-1R": (
-        BaseCoHiRF,
-        dict(base_model=SpectralSubspaceRandomization, n_features=1.0, repetitions=1),
-        dict(
-            base_model_kwargs=dict(
-                n_similarities=optuna.distributions.IntDistribution(10, 30),
-                sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
-                sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
-            ),
-        ),
-        [
-            dict(
-                base_model_kwargs=dict(
-                    n_similarities=20,
-                    sampling_ratio=0.5,
-                    sc_n_clusters=3,
-                ),
-            )
-        ],
-    ),
-    "CoHiRF-SC-SRGF-2R": (
-        BaseCoHiRF,
-        dict(base_model=SpectralSubspaceRandomization, n_features=1.0, repetitions=2),
-        dict(
-            base_model_kwargs=dict(
-                n_similarities=optuna.distributions.IntDistribution(10, 30),
-                sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
-                sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
-            ),
-        ),
-        [
-            dict(
-                base_model_kwargs=dict(
-                    n_similarities=20,
-                    sampling_ratio=0.5,
-                    sc_n_clusters=3,
-                ),
-            )
-        ],
-    ),
     "BatchCoHiRF": (
         BatchCoHiRF,
         dict(),
@@ -261,60 +221,6 @@ models_dict = {
             dict(
                 cohirf_kwargs=dict(
                     repetitions=5,
-                    base_model_kwargs=dict(
-                        n_similarities=20,
-                        sampling_ratio=0.5,
-                        sc_n_clusters=3,
-                    ),
-                )
-            )
-        ],
-    ),
-    "BatchCoHiRF-SC-SRGF-1R": (
-        BatchCoHiRF,
-        dict(
-            cohirf_model=BaseCoHiRF,
-            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, n_features=1.0, repetitions=1),
-        ),
-        dict(
-            cohirf_kwargs=dict(
-                base_model_kwargs=dict(
-                    n_similarities=optuna.distributions.IntDistribution(10, 30),
-                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
-                    sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
-                ),
-            )
-        ),
-        [
-            dict(
-                cohirf_kwargs=dict(
-                    base_model_kwargs=dict(
-                        n_similarities=20,
-                        sampling_ratio=0.5,
-                        sc_n_clusters=3,
-                    ),
-                )
-            )
-        ],
-    ),
-    "BatchCoHiRF-SC-SRGF-2R": (
-        BatchCoHiRF,
-        dict(
-            cohirf_model=BaseCoHiRF,
-            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, n_features=1.0, repetitions=2),
-        ),
-        dict(
-            cohirf_kwargs=dict(
-                base_model_kwargs=dict(
-                    n_similarities=optuna.distributions.IntDistribution(10, 30),
-                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
-                    sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
-                ),
-            )
-        ),
-        [
-            dict(
-                cohirf_kwargs=dict(
                     base_model_kwargs=dict(
                         n_similarities=20,
                         sampling_ratio=0.5,
@@ -516,6 +422,69 @@ search_space = deepcopy(models_dict[model_name][2])
 default_values = deepcopy(models_dict[model_name][3])
 models_dict[model_name + "-1000"] = (model_cls, model_params, search_space, default_values)
 
+# 1R versions
+cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("CoHiRF")]
+for model_name in cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = deepcopy(models_dict[model_name][1])
+    model_params = update_recursively(model_params, dict(n_features=1.0, repetitions=1))
+    search_space = deepcopy(models_dict[model_name][2])
+    search_space.pop("n_features", None)
+    search_space.pop("repetitions", None)
+    default_values = deepcopy(models_dict[model_name][3])
+    for default_value in default_values:
+        default_value.pop("n_features", None)
+        default_value.pop("repetitions", None)
+    models_dict[model_name + "-1R"] = (model_cls, model_params, search_space, default_values)
+
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = deepcopy(models_dict[model_name][1])
+    model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(n_features=1.0, repetitions=1)))
+    search_space = deepcopy(models_dict[model_name][2])
+    cohirf_kwargs_search_space = search_space.get("cohirf_kwargs", dict())
+    cohirf_kwargs_search_space.pop("n_features", None)
+    cohirf_kwargs_search_space.pop("repetitions", None)
+    default_values = deepcopy(models_dict[model_name][3])
+    for default_value in default_values:
+        cohirf_kwargs_default_value = default_value.get("cohirf_kwargs", dict())
+        cohirf_kwargs_default_value.pop("n_features", None)
+        cohirf_kwargs_default_value.pop("repetitions", None)
+    models_dict[model_name + "-1R"] = (model_cls, model_params, search_space, default_values)
+
+# 2R versions
+cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("CoHiRF") and model_name.find("-1R") == -1]
+for model_name in cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = deepcopy(models_dict[model_name][1])
+    model_params = update_recursively(model_params, dict(n_features=1.0, repetitions=2))
+    search_space = deepcopy(models_dict[model_name][2])
+    search_space.pop("n_features", None)
+    search_space.pop("repetitions", None)
+    default_values = deepcopy(models_dict[model_name][3])
+    for default_value in default_values:
+        default_value.pop("n_features", None)
+        default_value.pop("repetitions", None)
+    models_dict[model_name + "-2R"] = (model_cls, model_params, search_space, default_values)
+
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF") and model_name.find("-1R") == -1]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = deepcopy(models_dict[model_name][1])
+    model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(n_features=1.0, repetitions=2)))
+    search_space = deepcopy(models_dict[model_name][2])
+    cohirf_kwargs_search_space = search_space.get("cohirf_kwargs", dict())
+    cohirf_kwargs_search_space.pop("n_features", None)
+    cohirf_kwargs_search_space.pop("repetitions", None)
+    default_values = deepcopy(models_dict[model_name][3])
+    for default_value in default_values:
+        cohirf_kwargs_default_value = default_value.get("cohirf_kwargs", dict())
+        cohirf_kwargs_default_value.pop("n_features", None)
+        cohirf_kwargs_default_value.pop("repetitions", None)
+    models_dict[model_name + "-2R"] = (model_cls, model_params, search_space, default_values)
+
+# relaxed versions (top-down and top-down-inv consensus strategies)
 cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("CoHiRF")]
 for model_name in cohirf_models:
     model_cls = models_dict[model_name][0]
@@ -533,34 +502,7 @@ for model_name in cohirf_models:
     search_space = deepcopy(models_dict[model_name][2])
     default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-top-down-inv"] = (model_cls, model_params, search_space, default_values)
-
-batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
-for model_name in batch_cohirf_models:
-    model_cls = models_dict[model_name][0]
-    model_params = deepcopy(models_dict[model_name][1])
-    model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1)))
-    search_space = deepcopy(models_dict[model_name][2])
-    default_values = deepcopy(models_dict[model_name][3])
-    models_dict[model_name + "-1iter"] = (model_cls, model_params, search_space, default_values)
-
-batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
-for model_name in batch_cohirf_models:
-    model_cls = models_dict[model_name][0]
-    model_params = deepcopy(models_dict[model_name][1])
-    model_params = update_recursively(model_params, dict(batch_sample_strategy="random"))
-    search_space = deepcopy(models_dict[model_name][2])
-    default_values = deepcopy(models_dict[model_name][3])
-    models_dict[model_name + "-random"] = (model_cls, model_params, search_space, default_values)
-
-batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
-for model_name in batch_cohirf_models:
-    model_cls = models_dict[model_name][0]
-    model_params = deepcopy(models_dict[model_name][1])
-    model_params = update_recursively(model_params, dict(batch_sample_strategy="stratified"))
-    search_space = deepcopy(models_dict[model_name][2])
-    default_values = deepcopy(models_dict[model_name][3])
-    models_dict[model_name + "-stratified"] = (model_cls, model_params, search_space, default_values)
-
+    
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]
@@ -579,6 +521,37 @@ for model_name in batch_cohirf_models:
     default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-top-down-inv"] = (model_cls, model_params, search_space, default_values)
 
+# 1iter versions for batch
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = deepcopy(models_dict[model_name][1])
+    model_params = update_recursively(model_params, dict(cohirf_kwargs=dict(max_iter=1)))
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
+    models_dict[model_name + "-1iter"] = (model_cls, model_params, search_space, default_values)
+
+# random batches versions for batch
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = deepcopy(models_dict[model_name][1])
+    model_params = update_recursively(model_params, dict(batch_sample_strategy="random"))
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
+    models_dict[model_name + "-random"] = (model_cls, model_params, search_space, default_values)
+
+# stratified batches versions for batch
+batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
+for model_name in batch_cohirf_models:
+    model_cls = models_dict[model_name][0]
+    model_params = deepcopy(models_dict[model_name][1])
+    model_params = update_recursively(model_params, dict(batch_sample_strategy="stratified"))
+    search_space = deepcopy(models_dict[model_name][2])
+    default_values = deepcopy(models_dict[model_name][3])
+    models_dict[model_name + "-stratified"] = (model_cls, model_params, search_space, default_values)
+
+# no last stop versions for batch
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
 	model_cls = models_dict[model_name][0]
@@ -587,4 +560,3 @@ for model_name in batch_cohirf_models:
 	search_space = deepcopy(models_dict[model_name][2])
 	default_values = deepcopy(models_dict[model_name][3])
 	models_dict[model_name + "-nolaststop"] = (model_cls, model_params, search_space, default_values)
-    
