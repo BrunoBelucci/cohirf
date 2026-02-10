@@ -114,6 +114,28 @@ models_dict = {
             )
         ],
     ),
+    "CoHiRF-SC-SRGF2": (
+        BaseCoHiRF,
+        dict(base_model=SpectralSubspaceRandomization, n_features=1.0),
+        dict(
+            repetitions=optuna.distributions.IntDistribution(2, 10),
+            base_model_kwargs=dict(
+                n_similarities=optuna.distributions.IntDistribution(10, 30),
+                sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                sc_n_clusters=optuna.distributions.IntDistribution(2, 20),
+            ),
+        ),
+        [
+            dict(
+                repetitions=5,
+                base_model_kwargs=dict(
+                    n_similarities=20,
+                    sampling_ratio=0.5,
+                    sc_n_clusters=3,
+                ),
+            )
+        ],
+    ),
     "BatchCoHiRF": (
         BatchCoHiRF,
         dict(),
@@ -502,7 +524,7 @@ for model_name in cohirf_models:
     search_space = deepcopy(models_dict[model_name][2])
     default_values = deepcopy(models_dict[model_name][3])
     models_dict[model_name + "-top-down-inv"] = (model_cls, model_params, search_space, default_values)
-    
+
 batch_cohirf_models = [model_name for model_name in models_dict.keys() if model_name.startswith("BatchCoHiRF")]
 for model_name in batch_cohirf_models:
     model_cls = models_dict[model_name][0]
