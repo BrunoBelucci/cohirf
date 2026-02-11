@@ -39,6 +39,23 @@ models_dict = {
             )
         ],
     ),
+    CoHiRF.__name__
+    + "2": (
+        CoHiRF,
+        dict(),
+        dict(
+            n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
+            repetitions=optuna.distributions.IntDistribution(2, 10),
+            kmeans_n_clusters=optuna.distributions.IntDistribution(2, 30),
+        ),
+        [
+            dict(
+                n_features=0.3,
+                repetitions=5,
+                kmeans_n_clusters=3,
+            )
+        ],
+    ),
     "CoHiRF-KernelRBF": (
         BaseCoHiRF,
         dict(
@@ -52,6 +69,37 @@ models_dict = {
             repetitions=optuna.distributions.IntDistribution(2, 10),
             base_model_kwargs=dict(
                 n_clusters=optuna.distributions.IntDistribution(2, 5),
+            ),
+            transform_kwargs=dict(
+                gamma=optuna.distributions.FloatDistribution(0.1, 30),
+            ),
+        ),
+        [
+            dict(
+                n_features=0.3,
+                repetitions=5,
+                base_model_kwargs=dict(
+                    n_clusters=3,
+                ),
+                transform_kwargs=dict(
+                    gamma=1.0,
+                ),
+            )
+        ],
+    ),
+    "CoHiRF-KernelRBF2": (
+        BaseCoHiRF,
+        dict(
+            base_model=KMeans,
+            transform_method=RBFSampler,
+            transform_kwargs=dict(n_components=500),
+            representative_method="rbf",
+        ),
+        dict(
+            n_features=optuna.distributions.FloatDistribution(0.1, 0.6),
+            repetitions=optuna.distributions.IntDistribution(2, 10),
+            base_model_kwargs=dict(
+                n_clusters=optuna.distributions.IntDistribution(2, 30),
             ),
             transform_kwargs=dict(
                 gamma=optuna.distributions.FloatDistribution(0.1, 30),
@@ -122,7 +170,7 @@ models_dict = {
             base_model_kwargs=dict(
                 n_similarities=optuna.distributions.IntDistribution(10, 30),
                 sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
-                sc_n_clusters=optuna.distributions.IntDistribution(2, 20),
+                sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
             ),
         ),
         [
@@ -236,6 +284,35 @@ models_dict = {
                     n_similarities=optuna.distributions.IntDistribution(10, 30),
                     sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
                     sc_n_clusters=optuna.distributions.IntDistribution(2, 5),
+                ),
+            )
+        ),
+        [
+            dict(
+                cohirf_kwargs=dict(
+                    repetitions=5,
+                    base_model_kwargs=dict(
+                        n_similarities=20,
+                        sampling_ratio=0.5,
+                        sc_n_clusters=3,
+                    ),
+                )
+            )
+        ],
+    ),
+    "BatchCoHiRF-SC-SRGF2": (
+        BatchCoHiRF,
+        dict(
+            cohirf_model=BaseCoHiRF,
+            cohirf_kwargs=dict(base_model=SpectralSubspaceRandomization, n_features=1.0),
+        ),
+        dict(
+            cohirf_kwargs=dict(
+                repetitions=optuna.distributions.IntDistribution(2, 10),
+                base_model_kwargs=dict(
+                    n_similarities=optuna.distributions.IntDistribution(10, 30),
+                    sampling_ratio=optuna.distributions.FloatDistribution(0.2, 0.8),
+                    sc_n_clusters=optuna.distributions.IntDistribution(2, 30),
                 ),
             )
         ),
